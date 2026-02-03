@@ -1,12 +1,21 @@
-from models.users import Doctor_user
+from models.users import Doctor_user, Patient_user
 from app.extensions import db
 
-def get_user_by_email(email):
+def get_doctor_by_email(email):
     return Doctor_user.query.filter_by(email=email).first()
 
-def create_user(name,email,password,speciality,designation):
-    user = Doctor_user(name=name,email=email,password=password,speciality=speciality,designation=designation)
+def create_doctor(data):
+    doctor = Doctor_user(**data)
 
-    db.session.add(user)
+    db.session.add(doctor)
     db.session.commit()
-    return user
+    # return user
+
+
+def get_patient_by_email(email):
+    return Patient_user.query.filter_by(email=email).first()
+
+def create_patient(data):
+    patient = Patient_user(**data)
+    db.session.add(patient)
+    db.session.commit()

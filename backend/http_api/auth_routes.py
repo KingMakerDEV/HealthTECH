@@ -21,6 +21,7 @@ def register():
         data['email'],
         data['password'],
         data['specialist'],
-        data['designation']
+        data['designation'],
+        data['age']
     )
     return jsonify(response), status
