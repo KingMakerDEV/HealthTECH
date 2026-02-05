@@ -7,12 +7,12 @@ import PatientDashboard from "./pages/PatientDashboard";
 function App(){
   return(
     <BrowserRouter>
-    <routes>
-      <route path="/" element={<login/>}></route>
-      <route path="register" element={<Register/>}></route>
-      <route path="/doctor-dashboard" element={<DoctorDashboard/>}></route>
-      <route path="/patient-dashboard" element={<PatientDashboard/>}></route>
-    </routes>
+    <Routes>
+      <Route path="/" element={<Login/>}></Route>
+      <Route path="/register" element={<Register/>}></Route>
+      <Route path="/doctor-dashboard" element={<DoctorDashboard/>}></Route>
+      <Route path="/patient-dashboard" element={<PatientDashboard/>}></Route>
+    </Routes>
     </BrowserRouter>
   );
 
