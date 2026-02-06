@@ -1,11 +1,25 @@
-import axios from "axios";
-
 const BASE_URL = "http://127.0.0.1:5000/auth";
 
-export const loginUser = async (data) => {
-    return await axios.post(`${BASE_URL}/login`, data);
+export const registerUser = async (userData) => {
+  const response = await fetch(`${BASE_URL}/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(userData),
+  });
+
+  return response.json();
 };
 
-export const registerUser = async (data) => {
-    return await axios.post(`${BASE_URL}/register`, data);
+export const loginUser = async (userData) => {
+  const response = await fetch(`${BASE_URL}/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(userData),
+  });
+
+  return response.json();
 };

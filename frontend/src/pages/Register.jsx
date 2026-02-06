@@ -1,71 +1,46 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { registerUser } from "../api/authApi";
 
-function Register(){
-
-  const [form, setForm] = useState({
+function Register() {
+  const [formData, setFormData] = useState({
     role: "doctor",
     name: "",
     email: "",
     password: "",
-    specialist: "",
+    speciality: "",
     designation: "",
-    age: ""
+    age: "",
   });
 
-  const handleChange = (e)=>{
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
     });
   };
 
-  const handleSubmit = async ()=>{
-
-    try{
-
-      const res = await registerUser(form);
-
-      alert(res.data.message);
-
-    }catch{
-      alert("Registration failed");
-    }
-
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const result = await registerUser(formData);
+    console.log(result);
+    alert(result.message || result.error);
   };
 
-  return(
-
+  return (
     <div className="flex justify-center items-center h-screen">
-
-      <div className="bg-white p-6 shadow w-96">
-
+      <form onSubmit={handleSubmit} className="bg-white p-6 shadow-md rounded">
         <h2 className="text-xl mb-4">Register</h2>
 
-        <input name="name" placeholder="Name"
-        onChange={handleChange}
-        className="w-full p-2 border mb-2" />
+        <input name="name" placeholder="Name" onChange={handleChange} className="border p-2 mb-2 w-full" />
+        <input name="email" placeholder="Email" onChange={handleChange} className="border p-2 mb-2 w-full" />
+        <input name="password" placeholder="Password" type="password" onChange={handleChange} className="border p-2 mb-2 w-full" />
 
-        <input name="email" placeholder="Email"
-        onChange={handleChange}
-        className="w-full p-2 border mb-2" />
-
-        <input name="password" placeholder="Password"
-        onChange={handleChange}
-        className="w-full p-2 border mb-2" />
-
-        <button
-        onClick={handleSubmit}
-        className="bg-green-500 text-white w-full p-2">
-        Register
+        <button className="bg-blue-500 text-white p-2 w-full">
+          Register
         </button>
-
-      </div>
-
+      </form>
     </div>
-
   );
-
 }
 
 export default Register;

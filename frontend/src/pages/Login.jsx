@@ -1,77 +1,41 @@
-import {useState} from "react";
-import {loginUser} from "../api/authApi";
-import { useNavigate} from "react-router-dom";
+import React, { useState } from "react";
+import { loginUser } from "../api/authApi";
 
-function Login(){
-        const navigate=useNavigate();
-    
-        const [form ,setform]=useState({
-            role:"doctor",
-            email:"",
-            password:""
-        });
-        const handleChange=(e)=>{
-            setform({
-                ...form,
-                [e.target.name]: e.target.value
-            });
-        };
-        const handleSubmit=async()=>{
-            try{
-                const res=await loginUser(form);
-                const data=res.data;
-                localStorage.setItem("user_id",data.user);
-                localStorage.setItem("role",data.role);
-                if(data.role=="doctor"){
-                    navigate("/doctor-dashboard");
-                }else{
-                    navigate("/patient-dashboard");
-                }
-            }catch(err){
-                alert("login failed");  
-            }
-        }  
+function Login() {
+  const [formData, setFormData] = useState({
+    role: "doctor",
+    email: "",
+    password: "",
+  });
 
-    return(
-      <div className="flex justify-center items-center h-screen bg-gray-100">
-      <div className="bg-white p-6 rounded shadow w-80">
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const result = await loginUser(formData);
+    console.log(result);
+    alert(result.message || result.error);
+  };
+
+  return (
+    <div className="flex justify-center items-center h-screen">
+      <form onSubmit={handleSubmit} className="bg-white p-6 shadow-md rounded">
         <h2 className="text-xl mb-4">Login</h2>
 
-        <select
-          name="role"
-          onChange={handleChange}
-          className="w-full p-2 border mb-3"
-        >
-          <option value="doctor">Doctor</option>
-          <option value="patient">Patient</option>
-        </select>
+        <input name="email" placeholder="Email" onChange={handleChange} className="border p-2 mb-2 w-full" />
+        <input name="password" placeholder="Password" type="password" onChange={handleChange} className="border p-2 mb-2 w-full" />
 
-        <input
-          name="email"
-          placeholder="Email"
-          onChange={handleChange}
-          className="w-full p-2 border mb-3"
-        />
-
-        <input
-          name="password"
-          type="password"
-          placeholder="Password"
-          onChange={handleChange}
-          className="w-full p-2 border mb-3"
-        />
-
-        <button
-          onClick={handleSubmit}
-          className="w-full bg-blue-500 text-white p-2"
-        >
+        <button className="bg-green-500 text-white p-2 w-full">
           Login
         </button>
-
-      </div>
+      </form>
     </div>
-    );
+  );
 }
 
 export default Login;

@@ -6,10 +6,9 @@ def get_doctor_by_email(email):
 
 def create_doctor(data):
     doctor = Doctor_user(**data)
-
     db.session.add(doctor)
     db.session.commit()
-    # return user
+    return doctor   # ADD THIS
 
 
 def get_patient_by_email(email):
@@ -19,3 +18,4 @@ def create_patient(data):
     patient = Patient_user(**data)
     db.session.add(patient)
     db.session.commit()
+    return patient   # ADD THIS
