@@ -1,16 +1,17 @@
 # this is where i give database credentials
-
+from dotenv import load_dotenv
+load_dotenv()
 import os
 
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev_secret_key')
     DEBUG = True
 
-    DB_USER="postgres"
-    DB_PASSWORD="Abhay123"
-    DB_HOST="localhost"
-    DB_PORT="5432"
-    DB_NAME="hack1"
+    DB_USER=os.getenv('DB_USER')
+    DB_PASSWORD=os.getenv('DB_PASSWORD')
+    DB_HOST=os.getenv('DB_HOST')
+    DB_PORT=os.getenv('DB_PORT')
+    DB_NAME=os.getenv('DB_NAME')
 
     SQLALCHEMY_DATABASE_URI=(
         f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
