@@ -1,20 +1,47 @@
-# this is where i give database credentials
-from dotenv import load_dotenv
-load_dotenv()
-import os
+from pydantic_settings import BaseSettings
+from functools import lru_cache
 
-class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev_secret_key')
-    DEBUG = True
 
-    DB_USER=os.getenv('DB_USER')
-    DB_PASSWORD=os.getenv('DB_PASSWORD')
-    DB_HOST=os.getenv('DB_HOST')
-    DB_PORT=os.getenv('DB_PORT')
-    DB_NAME=os.getenv('DB_NAME')
+class Settings(BaseSettings):
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_HOST: str
+    DB_PORT: str = "5432"
+    DB_NAME: str
 
-    SQLALCHEMY_DATABASE_URI=(
-        f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    )
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
 
-    SQLALCHEMY_TRACK_MODIFICATIONS=False
+    NVIDIA_API_KEY: str = ""
+    NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+
+    BREVO_API_KEY: str = ""
+    SENDER_EMAIL: str = "alerts@carenetra.ai"
+    SENDER_NAME: str = "CARENETRA"
+
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_PHONE_NUMBER: str = ""
+
+    FRONTEND_URL: str = "http://localhost:5173"
+    DEBUG: bool = True
+
+    @property
+    def DATABASE_URL(self) -> str:
+        return (
+            f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
+
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()
