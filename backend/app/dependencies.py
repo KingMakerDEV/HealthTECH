@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.core.security import decode_access_token
-from app.models.models import User, UserRole
+from app.models.models import User, UserRole, PatientProfile
 
 security = HTTPBearer()
 
@@ -44,3 +44,20 @@ def require_doctor(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.DOCTOR:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Doctors only")
     return current_user
+
+
+def get_current_patient(
+    current_user: User = Depends(require_patient),
+    db: Session = Depends(get_db),
+) -> PatientProfile:
+    """
+    Dependency that returns the PatientProfile for the currently logged-in patient.
+    Raises 404 if profile not found.
+    """
+    patient = db.query(PatientProfile).filter(PatientProfile.user_id == current_user.id).first()
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient profile not found"
+        )
+    return patient

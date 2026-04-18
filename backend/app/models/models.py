@@ -232,6 +232,7 @@ class MedicalCourse(Base):
     start_date: Mapped[str] = mapped_column(String(20), nullable=False)
     end_date: Mapped[str] = mapped_column(String(20), nullable=False)
     notes_for_patient: Mapped[str] = mapped_column(Text, nullable=True)
+    patient_context: Mapped[str] = mapped_column(Text, nullable=True)  # <-- NEW FIELD
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -244,7 +245,6 @@ class MedicalCourse(Base):
         "Medication", back_populates="course", cascade="all, delete-orphan"
     )
     check_ins: Mapped[list["CheckIn"]] = relationship("CheckIn", back_populates="course")
-
 
 # ─────────────────────────────────────────────
 # TABLE 5: medications
