@@ -87,6 +87,7 @@ class CourseCreateRequest(BaseModel):
     start_date:        str
     end_date:          str
     notes_for_patient: Optional[str] = None
+    patient_context:   Optional[str] = None   # <-- NEW FIELD
     medications:       List[MedicationCreate]
 
 

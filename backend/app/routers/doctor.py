@@ -399,6 +399,65 @@ def find_patient(
 
 
 # ────────────────────────────────────────────
+# GET /api/doctor/courses
+# List all courses created by this doctor
+# ────────────────────────────────────────────
+
+@router.get("/courses")
+def list_doctor_courses(
+    current_user: User    = Depends(require_doctor),
+    db:           Session = Depends(get_db),
+):
+    """
+    Returns all courses created by this doctor.
+    assigned = True  → course has a patient_id (already assigned)
+    assigned = False → course is unassigned, available to give to a new patient
+    """
+    doctor = _get_doctor_profile(current_user, db)
+
+    courses = db.query(MedicalCourse).filter(
+        MedicalCourse.doctor_id == doctor.id,
+    ).order_by(MedicalCourse.created_at.desc()).all()
+
+    results = []
+    for c in courses:
+        # If assigned, include the patient name
+        patient_name = None
+        if c.patient_id:
+            p_profile = db.query(PatientProfile).filter(
+                PatientProfile.id == c.patient_id
+            ).first()
+            if p_profile:
+                p_user = db.query(User).filter(User.id == p_profile.user_id).first()
+                patient_name = p_user.full_name if p_user else "Unknown"
+
+        # Count medications
+        med_count = db.query(Medication).filter(
+            Medication.course_id == c.id,
+            Medication.is_active == True,
+        ).count()
+
+        results.append({
+            "course_id":         c.id,
+            "course_name":       c.course_name,
+            "condition_type":    c.condition_type.value,
+            "status":            c.status.value,
+            "start_date":        c.start_date,
+            "end_date":          c.end_date,
+            "assigned":          c.patient_id is not None,
+            "patient_name":      patient_name,
+            "medication_count":  med_count,
+            "created_at":        c.created_at.isoformat(),
+        })
+
+    return {
+        "courses":           results,
+        "total":             len(results),
+        "unassigned_count":  sum(1 for r in results if not r["assigned"]),
+    }
+
+
+# ────────────────────────────────────────────
 # POST /api/doctor/courses
 # Create a medical course
 # ────────────────────────────────────────────
@@ -424,6 +483,7 @@ def create_course(
         start_date         = payload.start_date,
         end_date           = payload.end_date,
         notes_for_patient  = payload.notes_for_patient,
+        patient_context    = payload.patient_context,   # <-- NEW FIELD
         status             = CourseStatus.ACTIVE,
     )
     db.add(course)

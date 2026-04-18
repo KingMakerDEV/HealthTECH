@@ -398,6 +398,83 @@ def get_pending_agent_message(
 
 
 # ────────────────────────────────────────────
+# GET /api/patient/agent-session
+# ────────────────────────────────────────────
+
+@router.get("/agent-session")
+def get_agent_session(
+    current_user: User    = Depends(require_patient),
+    db:           Session = Depends(get_db),
+):
+    profile = _get_patient_profile(current_user, db)
+    session = db.query(AgentSession).filter(
+        AgentSession.patient_id == profile.id,
+        AgentSession.status     == "active",
+    ).order_by(AgentSession.created_at.desc()).first()
+
+    if not session:
+        return {"has_active_session": False}
+
+    return {
+        "has_active_session": True,
+        "session_id":         session.id,
+        "conversation":       session.conversation,
+        "pending_question":   session.pending_question,
+        "pending_options":    session.pending_options,
+    }
+
+
+# ────────────────────────────────────────────
+# POST /api/patient/start-agent-session
+# ────────────────────────────────────────────
+
+from pydantic import BaseModel
+class StartSessionRequest(BaseModel):
+    initial_message: str = "Hi! I am CareAgent. How are you feeling today?"
+
+@router.post("/start-agent-session")
+def start_agent_session(
+    payload:      StartSessionRequest,
+    current_user: User    = Depends(require_patient),
+    db:           Session = Depends(get_db),
+):
+    profile = _get_patient_profile(current_user, db)
+
+    # End old active sessions
+    old_sessions = db.query(AgentSession).filter(
+        AgentSession.patient_id == profile.id,
+        AgentSession.status     == "active",
+    ).all()
+    for s in old_sessions:
+        s.status = "abandoned"
+
+    now = datetime.now(timezone.utc)
+    new_session = AgentSession(
+        patient_id       = profile.id,
+        status           = "active",
+        trigger          = "patient_initiated",
+        pending_question = payload.initial_message,
+        pending_options  = ["Feeling good", "Some discomfort", "Not doing well"],
+        conversation     = [{
+            "role":    "agent",
+            "content": payload.initial_message,
+            "options": ["Feeling good", "Some discomfort", "Not doing well"],
+            "time":    now.isoformat(),
+        }]
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    return {
+        "session_id":       new_session.id,
+        "conversation":     new_session.conversation,
+        "pending_question": new_session.pending_question,
+        "pending_options":  new_session.pending_options,
+    }
+
+
+# ────────────────────────────────────────────
 # POST /api/patient/checkin/agent-response
 # Patient responds to an agent question
 # ────────────────────────────────────────────
