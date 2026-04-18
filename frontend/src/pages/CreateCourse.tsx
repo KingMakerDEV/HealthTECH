@@ -96,6 +96,7 @@ const CreateCourse = () => {
         start_date: formValues.startDate,
         end_date: formValues.endDate,
         notes_for_patient: formValues.notes || null,
+        patient_context: formValues.patientContext || null,
         medications: validMedications.map(m => ({
           name: m.name,
           dosage: m.dosage,
@@ -176,6 +177,10 @@ const CreateCourse = () => {
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Notes for Patient (optional)</label>
                 <textarea {...register('notes')} rows={3} placeholder="Instructions or notes for the patient..." className="w-full px-4 py-2.5 rounded-lg bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring/30 resize-none" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Agent Context (optional)</label>
+                <textarea {...register('patientContext')} rows={3} placeholder="Background medical context for the AI agents..." className="w-full px-4 py-2.5 rounded-lg bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring/30 resize-none" />
               </div>
               <button type="submit" className="w-full py-2.5 rounded-lg gradient-primary text-primary-foreground font-medium text-sm flex items-center justify-center gap-2">
                 Next <ChevronRight size={16} />
