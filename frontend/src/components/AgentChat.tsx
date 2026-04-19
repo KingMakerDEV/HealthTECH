@@ -17,8 +17,8 @@ declare global {
 interface Question {
   id: string;
   question: string; // ← matches caretaker_agent output field name
-  type: 'mcq' | 'yesno' | 'scale' | 'text' | 'photo';
-  options: string[];
+  type: string;     // backend sends: mcq, yes_no, pain_scale, text, temperature, photo_prompt, greeting
+  options?: string[];
 }
 
 interface ChatMessage {
@@ -43,8 +43,6 @@ const AgentChat = () => {
   const [open, setOpen]                   = useState(false);
   const [phase, setPhase]                 = useState<Phase>('idle');
   const [sessionId, setSessionId]         = useState<string | null>(null);
-  const [questions, setQuestions]         = useState<Question[]>([]);
-  const [currentQIndex, setCurrentQIndex] = useState(0);
   const [currentQ, setCurrentQ]           = useState<Question | null>(null);
   const [messages, setMessages]           = useState<ChatMessage[]>([]);
   const [textInput, setTextInput]         = useState('');
@@ -113,48 +111,34 @@ const AgentChat = () => {
   // Uses q.question — the backend field name from caretaker_agent
   const displayQuestion = useCallback((q: Question) => {
     setCurrentQ(q);
+    // Backend mcq templates include options; yes_no templates don't, so provide defaults
+    let opts: string[] | undefined;
+    if (q.type === 'mcq' && q.options && q.options.length > 0) {
+      opts = q.options;
+    } else if (q.type === 'yes_no') {
+      opts = q.options && q.options.length > 0 ? q.options : ['Yes', 'No'];
+    }
     addMsg({
       role:         'cara',
       content:      q.question,
-      options:      ['mcq', 'yesno', 'scale'].includes(q.type) ? q.options : undefined,
+      options:      opts,
       questionType: q.type,
       isLatest:     true,
     });
     speak(q.question);
-    setPhase(q.type === 'photo' ? 'photo' : 'chatting');
+    setPhase(q.type === 'photo_prompt' ? 'photo' : 'chatting');
   }, [addMsg, speak]);
 
   // ── Session flow ──────────────────────────────────────────────────────────────
 
   const initChat = async () => {
-    setPhase('starting');
-    try {
-      const res = await conversationApi.getActive();
-      // key: has_active_session — matches fixed backend
-      if (res.data.has_active_session && res.data.session_id) {
-        setSessionId(res.data.session_id);
-        addMsg({ role: 'cara', content: "Welcome back! Let's continue your check-in." });
-        speak("Welcome back! Let's continue.");
-        const q = res.data.first_question as Question;
-        if (q) {
-          setQuestions([q]);
-          setCurrentQIndex(0);
-          setTimeout(() => displayQuestion(q), 700);
-        } else {
-          setPhase('idle');
-        }
-      } else {
-        addMsg({
-          role:    'cara',
-          content: "Hi! I'm CARA, your personal health companion. I'll ask you a few quick questions about how you're feeling today.",
-        });
-        speak("Hi! I'm CARA. Press Start whenever you're ready.");
-        setPhase('idle');
-      }
-    } catch {
-      addMsg({ role: 'cara', content: "Hi! I'm CARA. Press Start whenever you're ready." });
-      setPhase('idle');
-    }
+    // Do NOT check for active sessions — always start fresh
+    addMsg({
+      role: 'cara',
+      content: "Hi! I'm CARA, your personal health companion. Press Start to begin your check-in.",
+    });
+    speak("Hi! I'm CARA. Press Start whenever you're ready.");
+    setPhase('idle');
   };
 
   const startSession = async () => {
@@ -162,17 +146,18 @@ const AgentChat = () => {
     try {
       const res = await conversationApi.start();
       setSessionId(res.data.session_id);
-      const qs: Question[] = res.data.questions || [];
-      setQuestions(qs);
-      setCurrentQIndex(0);
 
-      // Show the real greeting from backend (uses patient's actual DB name)
-      if (res.data.message) {
-        addMsg({ role: 'cara', content: res.data.message });
-        speak(res.data.message);
-        setTimeout(() => { if (qs.length > 0) displayQuestion(qs[0]); }, 1200);
-      } else if (qs.length > 0) {
-        displayQuestion(qs[0]);
+      // Show greeting from backend
+      const greeting = res.data.greeting || res.data.message;
+      if (greeting) {
+        addMsg({ role: 'cara', content: greeting });
+        speak(greeting);
+      }
+
+      // Display the first question after greeting
+      const firstQ = res.data.first_question as Question;
+      if (firstQ) {
+        setTimeout(() => displayQuestion(firstQ), greeting ? 1200 : 0);
       }
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Failed to start check-in. Please try again.');
@@ -180,7 +165,25 @@ const AgentChat = () => {
     }
   };
 
-  // ── Answer flow — advances through local questions array ─────────────────────
+  // ── Answer flow — server-driven single-question advancement ──────────────────
+
+  const handleAnswerResponse = (data: any) => {
+    if (data.risk_tier) {
+      // Conversation complete — show final result
+      const tier = (data.risk_tier as string) || 'GREEN';
+      const message = data.friendly_message || "Check-in complete. Take care!";
+      setFinalTier(tier);
+      addMsg({ role: 'cara', content: message });
+      speak(message);
+      setPhase('done');
+    } else if (data.next_question) {
+      // More questions remain
+      displayQuestion(data.next_question as Question);
+    } else {
+      // Fallback: run pipeline if response shape is unexpected
+      runPipeline();
+    }
+  };
 
   const submitAnswer = async (answer: string) => {
     if (!sessionId || !currentQ || phase === 'submitting') return;
@@ -193,18 +196,8 @@ const AgentChat = () => {
     setPhase('submitting');
 
     try {
-      await conversationApi.answer(sessionId, currentQ.id, answer);
-
-      const nextIndex = currentQIndex + 1;
-      if (nextIndex < questions.length) {
-        setCurrentQIndex(nextIndex);
-        displayQuestion(questions[nextIndex]);
-      } else {
-        const msg = "Thank you! I'm now reviewing your check-in...";
-        addMsg({ role: 'cara', content: msg });
-        speak(msg);
-        await runPipeline();
-      }
+      const res = await conversationApi.answer(sessionId, currentQ.id, answer);
+      handleAnswerResponse(res.data);
     } catch {
       toast.error('Failed to submit answer. Please try again.');
       setPhase('chatting');
@@ -220,18 +213,8 @@ const AgentChat = () => {
 
     try {
       await conversationApi.uploadWound(sessionId, file);
-      await conversationApi.answer(sessionId, currentQ.id, 'photo_uploaded');
-
-      const nextIndex = currentQIndex + 1;
-      if (nextIndex < questions.length) {
-        setCurrentQIndex(nextIndex);
-        displayQuestion(questions[nextIndex]);
-      } else {
-        const msg = "Got it! Reviewing your check-in now...";
-        addMsg({ role: 'cara', content: msg });
-        speak(msg);
-        await runPipeline();
-      }
+      const res = await conversationApi.answer(sessionId, currentQ.id, 'photo_uploaded');
+      handleAnswerResponse(res.data);
     } catch {
       toast.error('Photo upload failed. Please try again.');
       setPhase('photo');
@@ -292,17 +275,16 @@ const AgentChat = () => {
     setPhase('idle');
     setSessionId(null);
     setCurrentQ(null);
-    setQuestions([]);
-    setCurrentQIndex(0);
     setMessages([]);
     setTextInput('');
     setFinalTier(null);
     setIsListening(false);
   };
 
+  // Indeterminate progress — we don't know total questions in single-question flow
   const progressPct = phase === 'done' ? 100
-    : questions.length === 0 ? 0
-    : Math.round((currentQIndex / questions.length) * 100);
+    : (phase === 'chatting' || phase === 'photo' || phase === 'submitting') ? 50
+    : 0;
 
   const tierInfo = finalTier ? TIER_CONFIG[finalTier as keyof typeof TIER_CONFIG] : null;
 
@@ -406,7 +388,7 @@ const AgentChat = () => {
                     </div>
                   )}
 
-                  {msg.role === 'cara' && msg.questionType === 'photo' && msg.isLatest && phase === 'photo' && (
+                  {msg.role === 'cara' && msg.questionType === 'photo_prompt' && msg.isLatest && phase === 'photo' && (
                     <motion.button
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -451,9 +433,9 @@ const AgentChat = () => {
               )}
             </div>
 
-            {/* Text input bar */}
+            {/* Text input bar — always visible during chatting/photo so user can type freely */}
             <AnimatePresence>
-              {phase === 'chatting' && currentQ?.type === 'text' && (
+              {(phase === 'chatting' || phase === 'photo') && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}

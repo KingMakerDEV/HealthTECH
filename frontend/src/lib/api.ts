@@ -33,11 +33,11 @@ export const conversationApi = {
   getActive: () =>
     api.get('/patient/conversation/active'),
 
-  /** Creates a new session — calls Ollama to generate personalised questions */
+  /** Creates a new session — returns { session_id, greeting, first_question } */
   start: () =>
     api.post('/patient/conversation/start'),
 
-  /** Submits one answer, returns next question or signals completion */
+  /** Submits one answer — returns { status, next_question } or { status, risk_tier, friendly_message } when complete */
   answer: (sessionId: string, questionId: string, answer: string) =>
     api.post(`/patient/conversation/${sessionId}/answer`, {
       question_id: questionId,

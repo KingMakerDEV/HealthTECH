@@ -1,329 +1,272 @@
 """
-CARENETRA — Caretaker Conversation Agent (Hybrid)
-Uses NVIDIA NIM LLM to understand patient context and select appropriate question templates.
-All medical questions come from a vetted template library — no hallucination risk.
+CARENETRA — Caretaker Conversation Agent
+Pure Python state machine. Zero LLM calls. Fully offline.
+
+Uses question_bank.py for all question text, options, and branching rules.
+Personalization via f-string substitution (patient name, meds, day number).
+
+Public API (called by conversation.py — signatures unchanged):
+  start_conversation(patient_id, course_id, db) → {greeting, first_question, state}
+  process_answer(state, question_id, answer)     → {next_question, state, should_submit}
 """
 import logging
-import json
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
-from app.models.models import PatientProfile, MedicalCourse, CheckIn, Medication
-from app.agents.nvidia_client import llm_client, LLM_MODEL
+from app.models.models import PatientProfile, MedicalCourse, Medication
+from app.nodes.question_bank import (
+    QUESTIONS,
+    CONDITION_QUEUES,
+    BRANCH_RULES,
+    CONDITION_LABELS,
+    GREETING_TEMPLATES,
+)
 
 logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------
-# Template Library (Vetted, Safe Questions)
-# ------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Personalization helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
-TEMPLATE_LIBRARY = {
-    "pain_scale": {
-        "question": "On a scale of zero to ten, where zero is no pain and ten is the worst pain imaginable, how much pain are you feeling at your surgical site right now?",
-        "type": "pain_scale",
-        "min": 0,
-        "max": 10
-    },
-    "fever_check": {
-        "question": "Do you have a thermometer handy? If so, what's your temperature right now? You can say 'I don't know' if you haven't checked.",
-        "type": "temperature",
-        "unit": "fahrenheit"
-    },
-    "wound_status": {
-        "question": "Let's check your wound. Any new redness, swelling, warmth, or discharge from the incision area?",
-        "type": "yes_no"
-    },
-    "wound_photo_prompt": {
-        "question": "Would you like to take a photo of the wound for me to analyze? It helps the doctor see what's happening without you coming in.",
-        "type": "photo_prompt"
-    },
-    "medication_adherence": {
-        "question": "Have you taken all your prescribed medications today?",
-        "type": "yes_no"
-    },
-    "energy_level": {
-        "question": "How's your energy level compared to yesterday? Better, worse, or about the same?",
-        "type": "mcq",
-        "options": ["Better", "Worse", "About the same"]
-    },
-    "fatigue_scale": {
-        "question": "On a scale of 1 to 10, where 1 is completely exhausted and 10 is full of energy, how tired do you feel?",
-        "type": "pain_scale",
-        "min": 1,
-        "max": 10
-    },
-    "nausea_check": {
-        "question": "Any nausea or vomiting since yesterday?",
-        "type": "yes_no"
-    },
-    "appetite": {
-        "question": "How is your appetite today?",
-        "type": "mcq",
-        "options": ["Normal", "Reduced", "No appetite"]
-    },
-    "mobility": {
-        "question": "Have you been able to get up and move around a bit today, as your doctor recommended?",
-        "type": "mcq",
-        "options": ["Yes, I moved around", "A little, but it was hard", "Not really, too painful"]
-    },
-    "general_feeling": {
-        "question": "How are you feeling overall today?",
-        "type": "mcq",
-        "options": ["Great", "Okay", "Not great", "Terrible"]
-    },
-    "new_symptoms": {
-        "question": "Any new or concerning symptoms since we last spoke?",
-        "type": "text"
-    },
-    "anything_else": {
-        "question": "Is there anything else you'd like to tell me about how you're feeling today?",
-        "type": "text"
-    },
-    "blood_glucose": {
-        "question": "What was your most recent blood sugar reading? You can say the number and whether it was before or after a meal.",
-        "type": "text"
-    },
-    "blood_pressure": {
-        "question": "Have you checked your blood pressure today? If yes, what was the reading?",
-        "type": "text"
-    }
-}
-
-
-VALID_TEMPLATE_KEYS = set(TEMPLATE_LIBRARY.keys())
-
-
-# ------------------------------------------------------------------
-# NVIDIA LLM Context Analyzer (Strict Template Selection)
-# ------------------------------------------------------------------
-
-async def _analyze_context_with_llm(
-    patient_name: str,
-    condition: str,
-    day: int,
-    previous_answers: List[str],
-    medications: List[str],
-    patient_context: str = ""
-) -> Dict[str, Any]:
+def _personalize(text: str, state: Dict[str, Any]) -> str:
     """
-    Uses NVIDIA NIM to select relevant template keys from the library.
-    The LLM MUST return only keys from the provided list — no free text.
+    Substitutes placeholders in question text with patient-specific values.
+    {name}            → patient first name
+    {meds}            → medication list string
+    {day}             → recovery day number
+    {condition_label} → human-readable condition
     """
-    template_keys_str = ", ".join(sorted(VALID_TEMPLATE_KEYS))
+    name            = state.get("patient_name", "there").split()[0]
+    meds_list       = state.get("medications", [])
+    condition_label = state.get("condition_label", "your condition")
+    day             = state.get("day", 1)
 
-    # More detailed, conversational system prompt
-    prompt = f"""You are CARA, a compassionate virtual health companion assisting a patient recovering from a medical procedure or managing a chronic condition.
+    # Build a readable meds string — "Metoprolol and Aspirin" or "Metoprolol, Aspirin, and Warfarin"
+    if not meds_list:
+        meds_str = "your medications"
+    elif len(meds_list) == 1:
+        meds_str = meds_list[0]
+    elif len(meds_list) == 2:
+        meds_str = f"{meds_list[0]} and {meds_list[1]}"
+    else:
+        meds_str = ", ".join(meds_list[:-1]) + f", and {meds_list[-1]}"
 
-Your task is to choose which safe, pre‑written health questions to ask next. You do NOT generate the questions yourself — you only pick their identifiers from a fixed list.
-
-Patient information:
-- Name (use exactly this name in your greeting, do not change it): {patient_name}
-- Condition: {condition}
-- Recovery day: {day}
-- Medications prescribed: {", ".join(medications) if medications else "None"}
-- What the patient said during their last check‑in: {"; ".join(previous_answers) if previous_answers else "This is the first check‑in of the day."}
-- Doctor's notes about this specific patient: {patient_context if patient_context else "No additional context provided."}
-
-Available question identifiers (you must choose only from this list):
-{template_keys_str}
-
-Based on the patient's condition, recovery day, and any recent answers, select 3 to 5 of the most clinically relevant question identifiers.
-
-Then, write a warm, personal greeting that includes the patient's name exactly as provided above. For example: "Hello Sarah, how are you feeling this morning?" or "Good afternoon Michael, let's see how you're doing today."
-
-Return ONLY a valid JSON object with this exact structure:
-{{
-  "selected_keys": ["key1", "key2", "key3"],
-  "greeting": "Your actual greeting here, including the patient's name"
-}}
-
-Rules (very important):
-- "selected_keys" must contain only identifiers from the list above. Do not invent new ones.
-- "greeting" must be a genuine, friendly sentence. Do NOT write placeholder text like "A warm greeting". Actually greet the patient by name exactly as given.
-- Do NOT include any markdown, explanation, or additional text. Only the JSON object."""
-
-    try:
-        response = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[
-                {"role": "system", "content": "You are CARA, a caring medical assistant. You output only valid JSON with keys from a predefined list and a natural greeting."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2,  # slight warmth for natural language
-            max_tokens=350
-        )
-
-        raw_json = response.choices[0].message.content.strip()
-
-        if raw_json.startswith("```"):
-            raw_json = raw_json.split("```")[1]
-            if raw_json.startswith("json"):
-                raw_json = raw_json[4:]
-        raw_json = raw_json.strip()
-
-        result = json.loads(raw_json)
-
-        selected = result.get("selected_keys", [])
-        valid_selected = [k for k in selected if k in VALID_TEMPLATE_KEYS]
-
-        if len(valid_selected) < len(selected):
-            logger.warning(f"[LLM] Filtered out invalid keys: {set(selected) - set(valid_selected)}")
-
-        return {
-            "selected_keys": valid_selected,
-            "greeting": result.get("greeting")
-        }
-
-    except Exception as e:
-        logger.error(f"[LLM] Failed: {e}")
-        return {"selected_keys": [], "greeting": None}
-
-
-# ------------------------------------------------------------------
-# Hybrid Question Generator
-# ------------------------------------------------------------------
-
-async def generate_caretaker_questions(
-    patient_id: str,
-    course_id: str,
-    db: Session
-) -> List[Dict[str, Any]]:
-    """Generates questions using hybrid approach with strict template enforcement."""
-    course = db.query(MedicalCourse).filter(MedicalCourse.id == course_id).first()
-    if not course:
-        logger.warning(f"Course {course_id} not found, using fallback")
-        return _rule_based_fallback(course=None, day=1, medications=[])
-
-    patient = db.query(PatientProfile).filter(PatientProfile.id == patient_id).first()
-    recovery_day = _calculate_recovery_day(course.start_date)
-
-    last_checkin = db.query(CheckIn).filter(
-        CheckIn.patient_id == patient_id,
-        CheckIn.course_id == course_id
-    ).order_by(CheckIn.created_at.desc()).first()
-    previous_answers = [last_checkin.symptom_summary] if (last_checkin and last_checkin.symptom_summary) else []
-
-    medications = db.query(Medication).filter(
-        Medication.course_id == course_id,
-        Medication.is_active == True
-    ).all()
-    med_names = [m.name for m in medications]
-
-    patient_context = course.patient_context or ""
-
-    llm_result = await _analyze_context_with_llm(
-        patient_name=patient.user.full_name if patient else "Patient",
-        condition=course.condition_type.value,
-        day=recovery_day,
-        previous_answers=previous_answers,
-        medications=med_names,
-        patient_context=patient_context
+    return (
+        text
+        .replace("{name}",            name)
+        .replace("{meds}",            meds_str)
+        .replace("{day}",             str(day))
+        .replace("{condition_label}", condition_label)
     )
 
-    selected_keys = llm_result.get("selected_keys", [])
-    if not selected_keys:
-        logger.info("[Caretaker] LLM returned no valid keys, using rule-based fallback")
-        return _rule_based_fallback(course, recovery_day, medications)
 
-    questions = []
+def _build_question(question_id: str, state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Returns a fully personalized question dict ready for the frontend.
+    Returns None if question_id is not in the bank.
+    """
+    template = QUESTIONS.get(question_id)
+    if not template:
+        logger.warning(f"[CaretakerAgent] Unknown question_id: {question_id}")
+        return None
 
-    greeting = llm_result.get("greeting")
-    if greeting:
-        questions.append({
-            "id": "greeting",
-            "question": greeting,
-            "type": "greeting",
-            "spoken_text": greeting
-        })
+    question_text = _personalize(template["question"], state)
+    spoken_text   = _personalize(template.get("spoken", template["question"]), state)
 
-    for key in selected_keys:
-        q = TEMPLATE_LIBRARY[key].copy()
-        q["id"] = f"{key}_{int(datetime.utcnow().timestamp())}"
-        q["spoken_text"] = q["question"]
-        questions.append(q)
-
-    # Ensure medication adherence is asked if medications exist and not already selected
-    if medications and "medication_adherence" not in selected_keys:
-        med_q = TEMPLATE_LIBRARY["medication_adherence"].copy()
-        med_q["id"] = f"medication_{int(datetime.utcnow().timestamp())}"
-        med_names_str = ", ".join(med_names[:3])
-        if len(med_names) > 3:
-            med_names_str += " and others"
-        med_q["question"] = f"Have you taken all your prescribed medications today? That includes {med_names_str}."
-        med_q["spoken_text"] = med_q["question"]
-        questions.append(med_q)
-
-    # Always add an open-ended "anything else" question at the end
-    if "anything_else" not in selected_keys:
-        q = TEMPLATE_LIBRARY["anything_else"].copy()
-        q["id"] = f"anything_else_{int(datetime.utcnow().timestamp())}"
-        q["spoken_text"] = q["question"]
-        questions.append(q)
-
-    logger.info(f"[Caretaker] Generated {len(questions)} questions using keys: {selected_keys}")
-    return questions
+    return {
+        "id":       question_id,
+        "question": question_text,
+        "spoken":   spoken_text,
+        "type":     template["type"],
+        "options":  list(template.get("options", [])),
+    }
 
 
-# ------------------------------------------------------------------
-# Rule-Based Fallback (now uses 'question' field consistently)
-# ------------------------------------------------------------------
-
-def _rule_based_fallback(
-    course: Optional[MedicalCourse],
-    day: int,
-    medications: List[Medication]
-) -> List[Dict[str, Any]]:
-    questions = []
-
-    if course:
-        cond = course.condition_type.value
-        if "SURGERY" in cond or "TRANSPLANT" in cond:
-            if day <= 10:
-                questions.append(TEMPLATE_LIBRARY["pain_scale"].copy())
-            if day <= 7:
-                questions.append(TEMPLATE_LIBRARY["fever_check"].copy())
-            if day <= 14:
-                questions.append(TEMPLATE_LIBRARY["wound_status"].copy())
-                questions.append(TEMPLATE_LIBRARY["wound_photo_prompt"].copy())
-            if day > 3:
-                questions.append(TEMPLATE_LIBRARY["energy_level"].copy())
-            if day <= 5:
-                questions.append(TEMPLATE_LIBRARY["nausea_check"].copy())
-        elif "DIABETES" in cond:
-            questions.append(TEMPLATE_LIBRARY["blood_glucose"].copy())
-        elif "HYPERTENSION" in cond or "BLOOD_PRESSURE" in cond:
-            questions.append(TEMPLATE_LIBRARY["blood_pressure"].copy())
-        else:
-            questions.append(TEMPLATE_LIBRARY["general_feeling"].copy())
-
-    if medications:
-        med_q = TEMPLATE_LIBRARY["medication_adherence"].copy()
-        med_names = ", ".join([m.name for m in medications[:3]])
-        if len(medications) > 3:
-            med_names += " and others"
-        med_q["question"] = f"Have you taken all your prescribed medications today? That includes {med_names}."
-        med_q["spoken_text"] = med_q["question"]
-        questions.append(med_q)
-
-    if len(questions) < 3:
-        questions.append(TEMPLATE_LIBRARY["new_symptoms"].copy())
-    questions.append(TEMPLATE_LIBRARY["anything_else"].copy())
-
-    for idx, q in enumerate(questions):
-        q["id"] = f"fallback_q_{idx}_{int(datetime.utcnow().timestamp())}"
-        q["spoken_text"] = q["question"]
-
-    return questions
-
-
-def _calculate_recovery_day(start_date_str: str) -> int:
+def _calculate_day(start_date_str: str) -> int:
     if not start_date_str:
         return 1
     try:
-        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        delta = datetime.utcnow().date() - start_date
+        start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        delta = datetime.now(timezone.utc).date() - start
         return max(1, delta.days + 1)
     except Exception:
         return 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Core queue — same for every patient, every condition
+# ─────────────────────────────────────────────────────────────────────────────
+
+CORE_QUEUE = ["general_feeling", "medication_adherence", "symptoms_today"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Branch insertion
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _apply_branches(
+    question_id:    str,
+    answer:         str,
+    remaining_queue: List[str],
+    covered:        List[str],
+) -> List[str]:
+    """
+    Checks branch rules for the just-answered question.
+    If the answer contains a trigger keyword, inserts the branch question IDs
+    at the FRONT of the remaining queue (if not already covered or queued).
+    Returns the (possibly modified) queue.
+    """
+    rules = BRANCH_RULES.get(question_id, [])
+    answer_lower = answer.lower()
+
+    to_insert = []
+    for keywords, branch_ids in rules:
+        if any(kw in answer_lower for kw in keywords):
+            for bid in branch_ids:
+                if bid not in covered and bid not in remaining_queue and bid not in to_insert:
+                    to_insert.append(bid)
+            break  # only apply first matching rule per question
+
+    return to_insert + remaining_queue
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def start_conversation(
+    patient_id: str,
+    course_id:  str,
+    db:         Session,
+) -> Dict[str, Any]:
+    """
+    Initialises conversation state and returns:
+      greeting       — personalised greeting string
+      first_question — the first question dict (general_feeling)
+      state          — full state dict to store in AgentSession
+    """
+    # Load course and patient from DB
+    course  = db.query(MedicalCourse).filter(MedicalCourse.id == course_id).first()
+    patient = db.query(PatientProfile).filter(PatientProfile.id == patient_id).first()
+
+    if not course:
+        raise ValueError(f"Course not found: {course_id}")
+
+    # Medication names for personalization
+    medications = db.query(Medication).filter(
+        Medication.course_id == course_id,
+        Medication.is_active == True,
+    ).all()
+    med_names = [m.name for m in medications]
+
+    # Condition details
+    condition       = course.condition_type.value
+    condition_label = CONDITION_LABELS.get(condition, "your condition")
+    day             = _calculate_day(course.start_date)
+
+    # Patient name
+    patient_name = "there"
+    if patient and patient.user:
+        patient_name = patient.user.full_name or "there"
+
+    # Build full question queue: core + condition-specific
+    condition_q = CONDITION_QUEUES.get(condition, CONDITION_QUEUES["DEFAULT"])
+    full_queue  = CORE_QUEUE + condition_q   # first item will be popped immediately
+
+    state = {
+        "patient_name":     patient_name,
+        "condition":        condition,
+        "condition_label":  condition_label,
+        "day":              day,
+        "medications":      med_names,
+        "patient_context":  getattr(course, "patient_context", "") or "",
+        "course_id":        course_id,
+        "covered":          [],           # question IDs already answered
+        "answers":          [],           # [{question_id, answer}, ...]
+        "question_queue":   full_queue[1:],  # remaining after first
+    }
+
+    # Build greeting — rotate by day number
+    greeting_template = GREETING_TEMPLATES[(day - 1) % len(GREETING_TEMPLATES)]
+    greeting = _personalize(greeting_template, state)
+
+    # First question
+    first_q = _build_question(full_queue[0], state)
+
+    logger.info(
+        f"[CaretakerAgent] Session started — patient={patient_id} "
+        f"condition={condition} day={day} queue_length={len(full_queue)}"
+    )
+
+    return {
+        "greeting":       greeting,
+        "first_question": first_q,
+        "state":          state,
+    }
+
+
+async def process_answer(
+    state:       Dict[str, Any],
+    question_id: str,
+    answer:      str,
+) -> Dict[str, Any]:
+    """
+    Records the answer, applies branching rules, and returns the next question.
+    If queue is empty → should_submit = True.
+
+    Returns:
+      next_question  — dict or None
+      state          — updated state
+      should_submit  — True when all questions are done
+    """
+    # Record answer
+    state["answers"].append({"question_id": question_id, "answer": answer})
+    state["covered"].append(question_id)
+
+    logger.info(f"[CaretakerAgent] Answer recorded — q={question_id} a={answer[:40]}")
+
+    # Get remaining queue (copy to avoid mutation issues)
+    remaining = list(state.get("question_queue", []))
+
+    # Apply branch rules — may insert questions at front
+    remaining = _apply_branches(
+        question_id=question_id,
+        answer=answer,
+        remaining_queue=remaining,
+        covered=state["covered"],
+    )
+
+    # Skip questions already covered (safety check)
+    while remaining and remaining[0] in state["covered"]:
+        remaining.pop(0)
+
+    if not remaining:
+        # All done — submit
+        state["question_queue"] = []
+        logger.info(f"[CaretakerAgent] Conversation complete — {len(state['answers'])} answers collected")
+        return {
+            "next_question": None,
+            "state":         state,
+            "should_submit": True,
+        }
+
+    # Pop next question
+    next_id   = remaining.pop(0)
+    state["question_queue"] = remaining
+    next_q    = _build_question(next_id, state)
+
+    if next_q is None:
+        # Unknown question ID — skip and recurse with a dummy answer
+        logger.warning(f"[CaretakerAgent] Skipping unknown question: {next_id}")
+        state["covered"].append(next_id)
+        return await process_answer(state, next_id, "skipped")
+
+    logger.info(f"[CaretakerAgent] Next question: {next_id} (queue remaining: {len(remaining)})")
+
+    return {
+        "next_question": next_q,
+        "state":         state,
+        "should_submit": False,
+    }
