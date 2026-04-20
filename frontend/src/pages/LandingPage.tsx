@@ -103,7 +103,8 @@ const StatCard = ({ stat, index }: { stat: typeof stats[0]; index: number }) => 
     </motion.div>
   );
 };
-// ===== Testimonial Card Component (unchanged but fine) =====
+
+// ===== Testimonial Card Component =====
 const TestimonialCard = ({ testimonial }: { testimonial: Testimonial }) => {
   return (
     <div className="group relative h-full rounded-2xl bg-gradient-to-br from-card/90 to-card/50 backdrop-blur-xl border border-border p-5 sm:p-6 lg:p-7 hover:shadow-xl transition-all duration-300 hover:scale-[1.02] flex flex-col">
@@ -140,7 +141,7 @@ const TestimonialCard = ({ testimonial }: { testimonial: Testimonial }) => {
   );
 };
 
-// ===== Testimonials Carousel Component (responsive arrows) =====
+// ===== Testimonials Carousel Component =====
 const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
@@ -209,7 +210,6 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
   
   const getTranslateX = () => {
     if (!containerRef.current) return 0;
-    // On mobile (<640px) 1 card, on md 2 cards, on lg 3 cards
     const width = containerRef.current.offsetWidth;
     let cardsPerView = 1;
     if (width >= 1024) cardsPerView = 3;
@@ -243,7 +243,6 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
         </div>
       </div>
       
-      {/* Navigation Arrows - hidden on small screens, visible on sm+ */}
       <button
         onClick={goToPrev}
         className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 md:-translate-x-4 lg:-translate-x-6 w-8 h-8 md:w-10 md:h-10 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-lg items-center justify-center hover:bg-background transition-colors z-10"
@@ -259,7 +258,6 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
         <ChevronRight size={20} />
       </button>
       
-      {/* Dot Indicators */}
       <div className="flex justify-center gap-2 mt-6 sm:mt-8">
         {testimonials.map((_, idx) => (
           <button
@@ -403,150 +401,147 @@ const LandingPage = () => {
     <div ref={containerRef} className="min-h-screen bg-background text-foreground">
       <Navbar />
 
-      {/* === HERO SECTION (Responsive: desktop 2‑col, tablet reduced 3D, mobile hide 3D) === */}
-<section className="relative min-h-screen flex items-center overflow-hidden">
-  {/* Ambient backgrounds unchanged */}
-  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
-  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(56,189,248,0.05)_0%,transparent_50%)]" />
+      {/* === HERO SECTION === */}
+      <section className="relative min-h-screen flex items-center overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(56,189,248,0.05)_0%,transparent_50%)]" />
 
-  <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-    <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center min-h-screen py-12 sm:py-20 lg:py-0">
-      {/* Left Column – Text Content */}
-      <motion.div
-        style={{ y: heroTextY, opacity: heroOpacity }}
-        className="space-y-5 sm:space-y-6 lg:space-y-8 text-center lg:text-left"
-      >
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center min-h-screen py-12 sm:py-20 lg:py-0">
+            {/* Left Column – Text Content */}
+            <motion.div
+              style={{ y: heroTextY, opacity: heroOpacity }}
+              className="space-y-5 sm:space-y-6 lg:space-y-8 text-center lg:text-left"
+            >
+              <motion.div
+                initial="hidden"
+                animate="visible"
+                variants={fadeUp}
+                custom={0}
+                className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-primary/10 text-primary text-xs sm:text-sm font-medium border border-primary/20 backdrop-blur-sm mx-auto lg:mx-0"
+              >
+                <Sparkles size={14} className="animate-pulse" />
+                <span>Intelligent Healthcare Platform</span>
+              </motion.div>
+
+              <motion.h1
+                variants={fadeUp}
+                custom={1}
+                initial="hidden"
+                animate="visible"
+                className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.15] tracking-tight"
+              >
+                Healthcare that{' '}
+                <span className="relative inline-block">
+                  <span className="gradient-text">watches over</span>
+                  <span className="absolute -bottom-1 sm:-bottom-2 left-0 w-full h-0.5 sm:h-1 bg-gradient-to-r from-primary to-secondary rounded-full opacity-60" />
+                </span>
+                <br />
+                your patients
+              </motion.h1>
+
+              <motion.p
+                variants={fadeUp}
+                custom={2}
+                initial="hidden"
+                animate="visible"
+                className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-lg lg:max-w-none mx-auto lg:mx-0 leading-relaxed"
+              >
+                CARENETRA uses AI agents to monitor patients 24/7, enabling proactive care, timely alerts, and better outcomes.
+              </motion.p>
+
+              <motion.div
+                variants={fadeUp}
+                custom={3}
+                initial="hidden"
+                animate="visible"
+                className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center lg:justify-start"
+              >
+                <Link
+                  to="/register"
+                  className="group relative px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-primary-foreground font-medium shadow-lg shadow-primary/25 hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden"
+                >
+                  <span className="relative z-10 text-sm sm:text-base">Start Monitoring Now</span>
+                  <ArrowRight size={18} className="relative z-10 group-hover:translate-x-1 transition-transform" />
+                  <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                </Link>
+                <Link
+                  to="/demo"
+                  className="px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl border-2 border-border bg-background/50 backdrop-blur-sm text-foreground font-medium hover:bg-muted/80 transition-all flex items-center justify-center gap-2"
+                >
+                  <Activity size={18} />
+                  <span className="text-sm sm:text-base">View Live Demo</span>
+                </Link>
+              </motion.div>
+
+              <motion.div
+                variants={fadeUp}
+                custom={4}
+                initial="hidden"
+                animate="visible"
+                className="pt-6 sm:pt-8 grid grid-cols-3 gap-3 sm:gap-4"
+              >
+                {stats.map((stat, idx) => (
+                  <StatCard key={stat.label} stat={stat} index={idx} />
+                ))}
+              </motion.div>
+            </motion.div>
+
+            {/* Right Column – 3D DNA Canvas */}
+            <motion.div
+              style={{ scale: canvasScale }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 1, delay: 0.2 }}
+              className="relative w-full hidden sm:block"
+            >
+              <div className="h-[350px] sm:h-[400px] md:h-[450px] lg:h-[700px] w-full">
+                <CarenetraDNA scrollProgress={scrollProgress} className="w-full h-full" />
+              </div>
+
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.8 }}
+                className="absolute top-4 sm:top-10 right-0 lg:right-[-20px] glass-card px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-lg border-primary/20"
+              >
+                <Activity size={14} className="inline mr-1 sm:mr-2 text-primary" />
+                Real-time Monitoring
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 1 }}
+                className="absolute bottom-4 sm:bottom-10 left-0 lg:left-[-20px] glass-card px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-lg border-secondary/20"
+              >
+                <Shield size={14} className="inline mr-1 sm:mr-2 text-secondary" />
+                HIPAA Compliant
+              </motion.div>
+            </motion.div>
+          </div>
+        </div>
+
         <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={fadeUp}
-          custom={0}
-          className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-primary/10 text-primary text-xs sm:text-sm font-medium border border-primary/20 backdrop-blur-sm mx-auto lg:mx-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.5 }}
+          className="absolute bottom-8 left-1/2 -translate-x-1/2"
         >
-          <Sparkles size={14} className="animate-pulse" />
-          <span>Intelligent Healthcare Platform</span>
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-widest">Scroll to explore</span>
+            <motion.div
+              animate={{ y: [0, 8, 0] }}
+              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+              className="text-primary"
+            >
+              <ChevronDown size={20} />
+            </motion.div>
+          </div>
         </motion.div>
+      </section>
 
-        <motion.h1
-          variants={fadeUp}
-          custom={1}
-          initial="hidden"
-          animate="visible"
-          className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.15] tracking-tight"
-        >
-          Healthcare that{' '}
-          <span className="relative inline-block">
-            <span className="gradient-text">watches over</span>
-            <span className="absolute -bottom-1 sm:-bottom-2 left-0 w-full h-0.5 sm:h-1 bg-gradient-to-r from-primary to-secondary rounded-full opacity-60" />
-          </span>
-          <br />
-          your patients
-        </motion.h1>
-
-        <motion.p
-          variants={fadeUp}
-          custom={2}
-          initial="hidden"
-          animate="visible"
-          className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-lg lg:max-w-none mx-auto lg:mx-0 leading-relaxed"
-        >
-          CARENETRA uses AI agents to monitor patients 24/7, enabling proactive care, timely alerts, and better outcomes.
-        </motion.p>
-
-        <motion.div
-          variants={fadeUp}
-          custom={3}
-          initial="hidden"
-          animate="visible"
-          className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center lg:justify-start"
-        >
-          <Link
-            to="/register"
-            className="group relative px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-primary-foreground font-medium shadow-lg shadow-primary/25 hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden"
-          >
-            <span className="relative z-10 text-sm sm:text-base">Start Monitoring Now</span>
-            <ArrowRight size={18} className="relative z-10 group-hover:translate-x-1 transition-transform" />
-            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-          </Link>
-          <Link
-            to="/demo"
-            className="px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl border-2 border-border bg-background/50 backdrop-blur-sm text-foreground font-medium hover:bg-muted/80 transition-all flex items-center justify-center gap-2"
-          >
-            <Activity size={18} />
-            <span className="text-sm sm:text-base">View Live Demo</span>
-          </Link>
-        </motion.div>
-
-       <motion.div
-  variants={fadeUp}
-  custom={4}
-  initial="hidden"
-  animate="visible"
-  className="pt-6 sm:pt-8 grid grid-cols-3 gap-3 sm:gap-4"
->
-  {stats.map((stat, idx) => (
-    <StatCard key={stat.label} stat={stat} index={idx} />
-  ))}
-</motion.div>
-      </motion.div>
-
-{/* Right Column – 3D DNA Canvas */}
-<motion.div
-  style={{ scale: canvasScale }}
-  initial={{ opacity: 0, scale: 0.95 }}
-  animate={{ opacity: 1, scale: 1 }}
-  transition={{ duration: 1, delay: 0.2 }}
-className="relative w-full hidden sm:block"
->
-  <div className="h-[350px] sm:h-[400px] md:h-[450px] lg:h-[700px] w-full">
-    <CarenetraDNA scrollProgress={scrollProgress} className="w-full h-full" />
-  </div>
-
-  {/* Floating badges (unchanged) */}
-  <motion.div
-    initial={{ opacity: 0, x: 20 }}
-    animate={{ opacity: 1, x: 0 }}
-    transition={{ delay: 0.8 }}
-    className="absolute top-4 sm:top-10 right-0 lg:right-[-20px] glass-card px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-lg border-primary/20"
-  >
-    <Activity size={14} className="inline mr-1 sm:mr-2 text-primary" />
-    Real-time Monitoring
-  </motion.div>
-
-  <motion.div
-    initial={{ opacity: 0, x: -20 }}
-    animate={{ opacity: 1, x: 0 }}
-    transition={{ delay: 1 }}
-    className="absolute bottom-4 sm:bottom-10 left-0 lg:left-[-20px] glass-card px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-lg border-secondary/20"
-  >
-    <Shield size={14} className="inline mr-1 sm:mr-2 text-secondary" />
-    HIPAA Compliant
-  </motion.div>
-</motion.div>
-    </div>
-  </div>
-
-  {/* Scroll indicator */}
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    transition={{ delay: 1.5 }}
-    className="absolute bottom-8 left-1/2 -translate-x-1/2"
-  >
-    <div className="flex flex-col items-center gap-2">
-      <span className="text-xs text-muted-foreground uppercase tracking-widest">Scroll to explore</span>
-      <motion.div
-        animate={{ y: [0, 8, 0] }}
-        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-        className="text-primary"
-      >
-        <ChevronDown size={20} />
-      </motion.div>
-    </div>
-  </motion.div>
-</section>
-
-      {/* === TRUST BAR (responsive gaps) === */}
+      {/* === TRUST BAR === */}
       <section className="py-8 sm:py-12 border-y border-border/30 bg-muted/10">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -578,7 +573,7 @@ className="relative w-full hidden sm:block"
         </div>
       </section>
 
-      {/* === FEATURES SECTION (fine‑tuned padding) === */}
+      {/* === FEATURES SECTION === */}
       <section id="features" className="py-16 sm:py-24 lg:py-32 bg-muted/20 relative">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -627,7 +622,7 @@ className="relative w-full hidden sm:block"
         </div>
       </section>
 
-      {/* === HOW IT WORKS (responsive) === */}
+      {/* === HOW IT WORKS === */}
       <section id="how-it-works" className="py-16 sm:py-24 lg:py-32 relative">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -672,7 +667,7 @@ className="relative w-full hidden sm:block"
         </div>
       </section>
 
-      {/* === TESTIMONIALS SECTION (with responsive button placement) === */}
+      {/* === TESTIMONIALS SECTION === */}
       <section id="testimonials" className="py-16 sm:py-24 lg:py-32 bg-muted/20 relative overflow-hidden">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative">
@@ -694,7 +689,6 @@ className="relative w-full hidden sm:block"
               </motion.p>
             </motion.div>
             
-            {/* Desktop: absolute top-right; Mobile: block below heading */}
             <div className="hidden sm:block absolute right-0 top-0 lg:top-2">
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
@@ -766,7 +760,6 @@ className="relative w-full hidden sm:block"
               </Dialog>
             </div>
 
-            {/* Mobile button */}
             <div className="sm:hidden flex justify-center mb-8">
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
@@ -779,7 +772,6 @@ className="relative w-full hidden sm:block"
                     Add Testimonial
                   </Button>
                 </DialogTrigger>
-                {/* same dialog content as above */}
                 <DialogContent className="sm:max-w-[425px]">
                   <DialogHeader>
                     <DialogTitle>Share Your Experience</DialogTitle>
@@ -844,7 +836,7 @@ className="relative w-full hidden sm:block"
         </div>
       </section>
 
-      {/* === CTA SECTION (responsive padding) === */}
+      {/* === CTA SECTION === */}
       <section className="py-16 sm:py-24 lg:py-32">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -896,9 +888,11 @@ className="relative w-full hidden sm:block"
         <div className="container mx-auto px-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/30">
-                <span className="text-white font-bold text-base sm:text-lg">C</span>
-              </div>
+              <img 
+                src="/CareNetra.png" 
+                alt="CARENETRA Logo" 
+                className="h-8 w-auto sm:h-10"
+              />
               <span className="font-semibold text-lg sm:text-xl">CARENETRA</span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground">© 2025 CARENETRA. All rights reserved.</p>
