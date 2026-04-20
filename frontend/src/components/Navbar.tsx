@@ -24,11 +24,12 @@ const Navbar = () => {
   return (
     <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">C</span>
-          </div>
-          <span className="font-bold text-xl text-foreground">CARENETRA</span>
+        <Link to="/" className="flex items-center">
+          <img 
+            src="/CareNetra.png" 
+            alt="CARENETRA Logo" 
+            className="h-10 w-auto sm:h-12 md:h-14"
+          />
         </Link>
 
         <div className="hidden md:flex items-center gap-6">
