@@ -46,6 +46,13 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     elif payload.role == UserRole.DOCTOR:
         profile = DoctorProfile(user_id=user.id)
         db.add(profile)
+    elif payload.role == UserRole.VOLUNTEER:
+        from app.models.models import VolunteerProfile
+        db.add(VolunteerProfile(
+            user_id=user.id,
+            phone=payload.phone,
+            area_description=payload.area_description,
+        ))
 
     db.commit()
     db.refresh(user)

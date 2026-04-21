@@ -152,10 +152,12 @@ async def escalation_agent_node(state: AgentState) -> AgentState:
         try:
             subject = f"[CARENETRA] {'EMERGENCY' if tier == 'EMERGENCY' else 'Patient Alert'} — {patient_name}"
             await send_email_alert(
-                to_email    = doctor_email,
-                to_name     = doctor_name or "Doctor",
-                subject     = subject,
-                body        = message,
+                to_email         = doctor_email,
+                to_name          = doctor_name or "Doctor",
+                subject          = subject,
+                body             = message,
+                wound_image_path = state.get("wound_image_path"),
+                wound_summary    = state.get("wound_analysis_summary"),
             )
             # Mark email sent
             _mark_email_sent(alert_id)

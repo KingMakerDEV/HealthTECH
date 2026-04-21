@@ -28,7 +28,7 @@ const LoginPage = () => {
         id: user_id,
         name: full_name,
         email: data.email,
-        role: role as 'DOCTOR' | 'PATIENT',
+        role: role as 'DOCTOR' | 'PATIENT' | 'VOLUNTEER',
         patient_id: unique_uid || undefined,
       };
       setAuth(access_token, user);

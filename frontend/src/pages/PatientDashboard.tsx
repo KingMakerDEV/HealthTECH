@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Copy, Check, Pill, ChevronRight, Activity,
-  Loader2, MessageSquare, Bell,
+  Loader2, MessageSquare, Bell, Camera, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 import DashboardLayout from '@/components/DashboardLayout';
 import { getUser } from '@/lib/auth';
-import api from '@/lib/api';
+import api, { conversationApi } from '@/lib/api';
+import ImpactDetector from '@/components/ImpactDetector';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -42,6 +43,7 @@ interface DashboardData {
   }>;
   last_check_in: string | null;
   unread_messages: number;
+  emergency_contact_phone?: string;
   pending_question: {
     session_id: string;
     question: string;
@@ -64,6 +66,8 @@ const PatientDashboard = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading]   = useState(true);
   const [copied, setCopied]     = useState(false);
+  const [uploadingWound, setUploadingWound] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchDashboard();
@@ -98,6 +102,32 @@ const PatientDashboard = () => {
   /** Opens AgentChat from anywhere on the dashboard */
   const openAgentChat = () => {
     window.dispatchEvent(new Event('carenetra:open-agent-chat'));
+  };
+
+  /** Handles a standalone wound photo upload directly from the dashboard */
+  const handleWoundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingWound(true);
+    try {
+      toast.info('Analyzing wound photo...');
+      const res = await conversationApi.dashboardUploadWound(file);
+      
+      // Update ui based on severity
+      if (res.data.status === 'success' || res.data.check_in_id) {
+        toast.success(res.data.friendly_message || 'Wound analysis complete! Your doctor has been updated.');
+        // Refresh dashboard to show updated status
+        fetchDashboard();
+      } else {
+        toast.success('Photo uploaded successfully.');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to upload photo');
+    } finally {
+      setUploadingWound(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   if (loading) {
@@ -187,24 +217,48 @@ const PatientDashboard = () => {
           </motion.div>
         )}
 
-        {/* ── Start daily check-in CTA (shown when no pending question) ────────── */}
+        {/* ── Start daily check-in CTA and Quick Wound Upload ────────── */}
         {!data.pending_question && (
-          <motion.div custom={1} variants={fadeUp}>
+          <motion.div custom={1} variants={fadeUp} className="grid sm:grid-cols-2 gap-4">
             <button
               onClick={openAgentChat}
               className="w-full glass-card p-5 flex items-center justify-between hover:border-primary/40 transition-colors group rounded-xl"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0">
                   <MessageSquare size={16} className="text-primary-foreground" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-foreground">Start today's check-in</p>
-                  <p className="text-xs text-muted-foreground">CARA will ask about your symptoms, medication and recovery</p>
+                  <p className="text-sm font-semibold text-foreground">Start Check-in</p>
+                  <p className="text-xs text-muted-foreground">General symptoms & recovery</p>
                 </div>
               </div>
               <ChevronRight size={18} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
             </button>
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingWound}
+              className="w-full glass-card p-5 flex items-center justify-between hover:border-orange-400/40 transition-colors group rounded-xl"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
+                  {uploadingWound ? <Loader2 size={16} className="text-white animate-spin" /> : <Camera size={16} className="text-white" />}
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-foreground">Upload Wound Photo</p>
+                  <p className="text-xs text-muted-foreground">Let AI analyze a quick snapshot</p>
+                </div>
+              </div>
+              <Upload size={18} className="text-muted-foreground group-hover:text-orange-400 transition-colors shrink-0" />
+            </button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*" 
+              onChange={handleWoundUpload} 
+            />
           </motion.div>
         )}
 
@@ -302,6 +356,12 @@ const PatientDashboard = () => {
           </div>
         </motion.div>
 
+        {/* ── Impact Detector ────────────────────────────────────────────────── */}
+        <ImpactDetector
+          patientName={data.full_name}
+          patientPhone={data.emergency_contact_phone || ''}
+          userId={user?.id}
+        />
       </motion.div>
     </DashboardLayout>
   );

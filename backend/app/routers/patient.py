@@ -175,6 +175,7 @@ def get_patient_dashboard(
         "last_check_in":     last_checkin.created_at.isoformat() if last_checkin else None,
         "unread_messages":   unread_count,
         "pending_question":  pending_q,
+        "emergency_contact_phone": profile.emergency_contact_phone,
     }
 
 
@@ -227,6 +228,74 @@ async def submit_checkin(
         errors             = final_state.get("errors", []),
     )
 
+
+# ────────────────────────────────────────────
+# POST /api/patient/checkin/wound
+# ────────────────────────────────────────────
+
+import shutil
+
+@router.post("/checkin/wound", response_model=CheckInResponse)
+async def submit_wound_checkin(
+    file:         UploadFile       = File(...),
+    current_user: User             = Depends(require_patient),
+    db:           Session          = Depends(get_db),
+):
+    profile = _get_patient_profile(current_user, db)
+
+    # Validate file type
+    allowed = {"image/jpeg", "image/png", "image/webp", "image/heic"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, or WebP images accepted")
+
+    # Save image
+    ext = (file.filename or "wound.jpg").rsplit(".", 1)[-1].lower()
+    filename = f"{str(profile.id)[:8]}_dash_{uuid.uuid4().hex[:8]}.{ext}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
+    with open(file_path, "wb") as buf:
+        shutil.copyfileobj(file.file, buf)
+
+    # Get active course
+    active_course = db.query(MedicalCourse).filter(
+        MedicalCourse.patient_id == profile.id,
+        MedicalCourse.status     == "ACTIVE",
+    ).first()
+
+    raw_input = "Patient uploaded a standalone wound photo from the dashboard."
+
+    # Create check_in
+    check_in = CheckIn(
+        patient_id   = profile.id,
+        course_id    = active_course.id if active_course else None,
+        input_type   = InputType.TEXT,
+        raw_input    = raw_input,
+    )
+    db.add(check_in)
+    db.commit()
+    db.refresh(check_in)
+
+    # Run pipeline with image
+    final_state = await run_agent_pipeline(
+        patient_id       = str(profile.id),
+        check_in_id      = str(check_in.id),
+        raw_input        = raw_input,
+        input_type       = "TEXT",
+        course_id        = str(active_course.id) if active_course else None,
+        has_wound_image  = True,
+        wound_image_path = file_path,
+    )
+
+    return CheckInResponse(
+        check_in_id        = check_in.id,
+        patient_id         = profile.id,
+        total_score        = final_state.get("total_score"),
+        tier               = final_state.get("tier"),
+        escalation_action  = final_state.get("escalation_action"),
+        symptom_summary    = final_state.get("symptom_summary"),
+        new_interval_hours = final_state.get("new_interval_hours"),
+        errors             = final_state.get("errors", []),
+    )
 
 # ────────────────────────────────────────────
 # POST /api/patient/checkin/voice

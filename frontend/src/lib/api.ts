@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -56,6 +56,15 @@ export const conversationApi = {
   /** Finalises session — runs the full 5-agent risk pipeline, returns friendly result */
   submit: (sessionId: string) =>
     api.post(`/patient/conversation/${sessionId}/submit`),
+
+  /** Uploads a wound photo directly from the patient dashboard and triggers the vision/risk pipeline */
+  dashboardUploadWound: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/patient/checkin/wound`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export default api;

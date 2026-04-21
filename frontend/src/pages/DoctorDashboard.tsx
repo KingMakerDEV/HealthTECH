@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, AlertTriangle, Search, Activity, TrendingUp, Clock, Pill,
-  Loader2, Send, Plus, X, ChevronRight, UserSearch, BookOpen, Check,
+  Loader2, Send, Plus, X, ChevronRight, UserSearch, BookOpen, Check, Camera
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
@@ -91,6 +91,7 @@ interface PatientDetail {
   }>;
   recent_wounds: Array<{
     id: string; severity: string; summary: string;
+    redness: boolean; swelling: boolean; texture_change: boolean;
     wound_score: number; image_url: string | null; created_at: string;
   }>;
   condition_metrics: Record<string, { value: string; status: string; note?: string }>;
@@ -714,6 +715,69 @@ const DoctorDashboard = () => {
                             <p className="text-xs text-muted-foreground">
                               {m.frequency}{m.time_of_day ? ` · ${m.time_of_day}` : ''}
                             </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Wound Analysis */}
+                  {detail.recent_wounds?.length > 0 && (
+                    <div className="glass-card p-5 border-l-4 border-l-orange-400">
+                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                        <Camera size={14} className="text-orange-400" /> Recent AI Wound Analysis
+                      </h3>
+                      <div className="space-y-4">
+                        {detail.recent_wounds.map((w) => (
+                          <div key={w.id} className="p-3 bg-muted/40 rounded-lg border border-border/50 flex flex-col md:flex-row gap-4">
+                            {/* Thumbnail */}
+                            {w.image_url && (
+                              <div className="w-full md:w-32 h-32 shrink-0 rounded-md overflow-hidden bg-muted flex items-center justify-center">
+                                <img
+                                  src={api.getUri().replace('/api', '') + '/' + w.image_url.replace(/\\/g, '/')}
+                                  alt="Wound"
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400?text=No+Image' }}
+                                />
+                              </div>
+                            )}
+                            
+                            {/* Analysis Details */}
+                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <h4 className="text-sm font-semibold text-foreground truncate">
+                                  Severity: {w.severity}
+                                </h4>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                  w.wound_score > 7 ? 'bg-red-500/10 text-red-500' :
+                                  w.wound_score > 3 ? 'bg-orange-500/10 text-orange-400' :
+                                  'bg-emerald-500/10 text-emerald-400'
+                                }`}>
+                                  Score: {w.wound_score.toFixed(1)}/10
+                                </span>
+                              </div>
+                              
+                              <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                                {w.summary || 'No detailed summary provided.'}
+                              </p>
+                              
+                              {/* Badges */}
+                              <div className="flex flex-wrap gap-1.5 mt-auto">
+                                <span className={`text-[10px] px-2 py-0.5 rounded border ${w.redness ? 'border-red-400/30 bg-red-400/10 text-red-400' : 'border-border/50 text-muted-foreground'}`}>
+                                  {w.redness ? 'Redness Detected' : 'No Redness'}
+                                </span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded border ${w.swelling ? 'border-orange-400/30 bg-orange-400/10 text-orange-400' : 'border-border/50 text-muted-foreground'}`}>
+                                  {w.swelling ? 'Swelling Detected' : 'No Swelling'}
+                                </span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded border ${w.texture_change ? 'border-yellow-400/30 bg-yellow-400/10 text-yellow-400' : 'border-border/50 text-muted-foreground'}`}>
+                                  {w.texture_change ? 'Texture Change' : 'Normal Texture'}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <div className="text-[10px] text-muted-foreground shrink-0 md:text-right pt-1">
+                              {new Date(w.created_at).toLocaleString()}
+                            </div>
                           </div>
                         ))}
                       </div>

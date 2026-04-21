@@ -1,153 +1,229 @@
 """
-Node 2 — Vision Analysis Agent
-Analyses a wound photo using moondream (local Ollama vision model).
+Node 2 — Vision Analysis Agent (Classical CV — No LLM)
+Analyses a wound photo using OpenCV image processing.
 
-moondream is a small vision model — it answers plain questions about images
-well but doesn't reliably produce structured JSON output. So this node:
-  1. Sends a plain-question prompt (no JSON schema instruction)
-  2. Reads the plain-text response
-  3. Maps it locally to a structured WoundAnalysis record using keyword detection
-  4. Derives a wound_score (0–10) from detected findings
+Detects:
+  - Redness: HSV color thresholding (red hue ranges)
+  - Swelling: contour area relative to expected incision area (placeholder baseline)
+  - Texture change: local variance / edge density
 
-This "ask then classify locally" approach is more reliable than asking a small
-vision model to produce JSON directly.
+Outputs a wound score (0–10) and persists WoundAnalysis record.
 """
 import base64
 import logging
+import cv2
+import numpy as np
+from typing import Optional
 from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.agents.state import AgentState
-from app.agents.nvidia_client import vision_client, VISION_MODEL
 from app.database import SessionLocal
 from app.models.models import WoundAnalysis, WoundSeverity
 
 logger = logging.getLogger(__name__)
 
 
-# ── Prompt — plain questions, no JSON schema ──────────────────────────────────
-# moondream works best with direct, concrete questions.
-# We ask three yes/no questions in one shot to keep it to one API call.
+# ------------------------------------------------------------------
+# OpenCV Analysis Functions
+# ------------------------------------------------------------------
 
-VISION_PROMPT = (
-    "Look at this wound or surgical site photo carefully. "
-    "Answer these three questions with yes or no, then add a brief explanation:\n\n"
-    "1. Is there visible redness or inflammation around the wound?\n"
-    "2. Is there visible swelling or raised tissue?\n"
-    "3. Are there any abnormal textures such as discharge, crusting, or unusual colour?\n\n"
-    "Keep your answer short and factual."
-)
-
-
-# ── Local classification from plain-text response ────────────────────────────
-
-def _parse_vision_response(raw_text: str) -> dict:
+def _detect_redness(image_bgr: np.ndarray) -> tuple[bool, float]:
     """
-    Maps moondream's plain-text response to structured findings.
-    Keyword-based — designed for the specific three-question prompt above.
-    Returns a dict with: redness, swelling, texture_change, severity, score, summary
+    Detect redness in wound region using HSV color space.
+    Returns (redness_detected, redness_score 0–10).
     """
-    text_lower = raw_text.lower()
-
-    # ── Detect findings via keywords ──────────────────────────────
-
-    # Redness
-    redness = (
-        any(kw in text_lower for kw in ["yes", "redness", "red", "inflam", "pink", "flush"])
-        and not _is_negated("redness", text_lower)
-        and not _is_negated("redness", text_lower)
-    )
-    # Re-check: if "no" appears near "redness" in Q1 context, override
-    lines = raw_text.strip().split("\n")
-    if lines:
-        q1_line = lines[0].lower() if len(lines) >= 1 else ""
-        redness = _answer_is_yes(q1_line)
-
-    # Swelling
-    swelling = False
-    if len(lines) >= 2:
-        q2_line = lines[1].lower()
-        swelling = _answer_is_yes(q2_line)
-
-    # Texture change
-    texture_change = False
-    if len(lines) >= 3:
-        q3_line = lines[2].lower()
-        texture_change = _answer_is_yes(q3_line)
-
-    # Fallback: scan full text if line-based parsing yielded no findings at all
-    if not redness and not swelling and not texture_change:
-        redness        = any(kw in text_lower for kw in ["redness", "red ", "inflam", "irritat"])
-        swelling       = any(kw in text_lower for kw in ["swelling", "swollen", "raised", "puffy"])
-        texture_change = any(kw in text_lower for kw in ["discharge", "crust", "abnormal", "unusual", "pus", "oozing"])
-
-    # ── Score derivation (0–10 scale) ────────────────────────────
-    # Base score from number of positive findings
-    finding_count = sum([redness, swelling, texture_change])
-
-    if finding_count == 0:
-        score    = 1.0
-        severity = WoundSeverity.NORMAL
-    elif finding_count == 1:
-        score    = 3.5
-        severity = WoundSeverity.MILD
-    elif finding_count == 2:
-        score    = 6.5
-        severity = WoundSeverity.MODERATE
-    else:  # all 3
-        score    = 8.5
-        severity = WoundSeverity.SEVERE
-
-    # Boost score if high-severity keywords present in full response
-    if any(kw in text_lower for kw in ["pus", "discharge", "infection", "necrosis", "very red", "severely"]):
-        score = min(10.0, score + 1.5)
-
-    # ── Build patient-friendly summary ───────────────────────────
-    findings_found = []
-    if redness:        findings_found.append("redness")
-    if swelling:       findings_found.append("swelling")
-    if texture_change: findings_found.append("unusual texture")
-
-    if not findings_found:
-        summary = "Wound appears clean with no signs of infection detected."
-    elif finding_count == 1:
-        summary = f"Wound shows some {findings_found[0]}. Worth monitoring but not immediately alarming."
+    hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+    
+    # Red wraps around 0: lower red (0-10) and upper red (160-180)
+    lower_red1 = np.array([0, 50, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([160, 50, 50])
+    upper_red2 = np.array([180, 255, 255])
+    
+    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    red_mask = cv2.bitwise_or(mask1, mask2)
+    
+    # Optional: apply morphological opening to remove noise
+    kernel = np.ones((3, 3), np.uint8)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    
+    total_pixels = image_bgr.shape[0] * image_bgr.shape[1]
+    red_pixels = np.sum(red_mask > 0)
+    red_ratio = red_pixels / total_pixels if total_pixels > 0 else 0
+    
+    # Map ratio to 0–10 score (thresholds are empirical)
+    if red_ratio < 0.02:
+        redness_score = 0.0
+        detected = False
+    elif red_ratio < 0.05:
+        redness_score = 2.5
+        detected = True
+    elif red_ratio < 0.10:
+        redness_score = 5.0
+        detected = True
     else:
-        summary = f"Wound shows {' and '.join(findings_found)}. Doctor has been notified to review."
+        redness_score = 8.0
+        detected = True
+        
+    logger.debug(f"Redness ratio: {red_ratio:.4f} -> score: {redness_score}")
+    return detected, redness_score
 
+
+def _detect_swelling(image_bgr: np.ndarray, baseline_area: Optional[float] = None) -> tuple[bool, float]:
+    """
+    Approximate swelling via contour area of the wound/incision.
+    Without baseline, we assume an incision area threshold.
+    Returns (swelling_detected, swelling_score 0–10).
+    """
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blurred, 50, 150)
+    
+    # Find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return False, 0.0
+    
+    # Assume largest contour is the wound/incision
+    largest_contour = max(contours, key=cv2.contourArea)
+    area = cv2.contourArea(largest_contour)
+    
+    # If baseline provided, compute change; else use heuristic threshold
+    if baseline_area is not None and baseline_area > 0:
+        area_change = (area - baseline_area) / baseline_area
+        if area_change > 0.2:   # 20% increase = swelling
+            swelling_score = min(10.0, 5.0 + (area_change * 20))
+            detected = True
+        else:
+            swelling_score = 0.0
+            detected = False
+    else:
+        # Heuristic: incision area relative to image size
+        total_pixels = image_bgr.shape[0] * image_bgr.shape[1]
+        area_ratio = area / total_pixels
+        # Typical incision is small (<2% of image). Swollen incision larger.
+        if area_ratio > 0.05:
+            swelling_score = 7.0
+            detected = True
+        elif area_ratio > 0.03:
+            swelling_score = 4.0
+            detected = True
+        else:
+            swelling_score = 0.0
+            detected = False
+            
+    logger.debug(f"Contour area: {area:.0f}, ratio: {area/total_pixels:.4f} -> swelling score: {swelling_score}")
+    return detected, swelling_score
+
+
+def _detect_texture_change(image_bgr: np.ndarray) -> tuple[bool, float]:
+    """
+    Estimate texture irregularity using local variance (Laplacian variance).
+    High variance indicates rough/uneven texture (possible discharge, crusting).
+    Returns (texture_change_detected, texture_score 0–10).
+    """
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    variance = laplacian.var()
+    
+    # Variance thresholds (empirical, may need tuning)
+    if variance < 50:
+        texture_score = 0.0
+        detected = False
+    elif variance < 150:
+        texture_score = 3.0
+        detected = False  # still normal variation
+    elif variance < 300:
+        texture_score = 5.0
+        detected = True
+    else:
+        texture_score = 8.0
+        detected = True
+        
+    logger.debug(f"Laplacian variance: {variance:.2f} -> texture score: {texture_score}")
+    return detected, texture_score
+
+
+def analyze_wound_image(image_path: str) -> dict:
+    """
+    Main analysis function. Returns structured findings similar to LLM-based version.
+    """
+    img = cv2.imread(image_path)
+    if img is None:
+        raise ValueError(f"Could not load image: {image_path}")
+    
+    # Resize for consistency (optional, but speeds up processing)
+    max_dim = 800
+    h, w = img.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        img = cv2.resize(img, (new_w, new_h))
+    
+    # Detect redness
+    redness_detected, redness_score = _detect_redness(img)
+    
+    # Detect swelling (without baseline)
+    swelling_detected, swelling_score = _detect_swelling(img)
+    
+    # Detect texture change
+    texture_detected, texture_score = _detect_texture_change(img)
+    
+    # Combine scores into overall wound score (weighted average)
+    # Redness 40%, Swelling 30%, Texture 30%
+    overall_score = (redness_score * 0.4) + (swelling_score * 0.3) + (texture_score * 0.3)
+    overall_score = round(overall_score, 1)
+    
+    # Determine severity
+    if overall_score < 2.0:
+        severity = WoundSeverity.NORMAL
+    elif overall_score < 4.0:
+        severity = WoundSeverity.MILD
+    elif overall_score < 7.0:
+        severity = WoundSeverity.MODERATE
+    else:
+        severity = WoundSeverity.SEVERE
+        
+    # Build summary
+    findings = []
+    if redness_detected: findings.append("redness")
+    if swelling_detected: findings.append("swelling")
+    if texture_detected: findings.append("unusual texture")
+    
+    if not findings:
+        summary = "Wound appears clean with no signs of infection detected."
+    elif len(findings) == 1:
+        summary = f"Wound shows some {findings[0]}. Worth monitoring but not immediately alarming."
+    else:
+        summary = f"Wound shows {' and '.join(findings)}. Doctor has been notified to review."
+    
     return {
-        "redness":        redness,
-        "swelling":       swelling,
-        "texture_change": texture_change,
-        "severity":       severity,
-        "score":          round(score, 1),
-        "summary":        summary,
-        "raw_response":   raw_text,
+        "redness_detected": redness_detected,
+        "swelling_detected": swelling_detected,
+        "texture_change_detected": texture_detected,
+        "severity": severity,
+        "score": overall_score,
+        "summary": summary,
+        "raw_response": f"CV analysis: redness={redness_score:.1f}, swelling={swelling_score:.1f}, texture={texture_score:.1f}",
+        "redness_score": redness_score,
+        "swelling_score": swelling_score,
+        "texture_score": texture_score,
     }
 
 
-def _answer_is_yes(line: str) -> bool:
-    """Returns True if a single Q&A line indicates a positive finding."""
-    strong_yes = ["yes", "visible", "present", "detected", "apparent", "notable"]
-    strong_no  = ["no ", "none", "not ", "no visible", "no sign", "cannot", "can't", "doesn't", "absent"]
-    has_yes    = any(kw in line for kw in strong_yes)
-    has_no     = any(kw in line for kw in strong_no)
-    return has_yes and not has_no
-
-
-def _is_negated(keyword: str, text: str) -> bool:
-    """Crude negation check — looks for 'no <keyword>' pattern."""
-    return f"no {keyword}" in text or f"not {keyword}" in text
-
-
-# ── Agent node ────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------
+# Agent Node (Maintained same interface)
+# ------------------------------------------------------------------
 
 async def vision_agent_node(state: AgentState) -> AgentState:
     """
-    Runs wound photo through moondream vision model locally via Ollama.
+    Runs wound photo through classical CV analysis.
     Stores a WoundAnalysis record and updates AgentState.
     """
-    logger.info(f"[VisionAgent] Starting for patient {state['patient_id']}")
+    logger.info(f"[VisionAgent] Starting CV analysis for patient {state['patient_id']}")
     errors = list(state.get("errors", []))
 
     wound_path = state.get("wound_image_path")
@@ -164,63 +240,23 @@ async def vision_agent_node(state: AgentState) -> AgentState:
             "errors": errors,
         }
 
-    # ── Load and encode image ─────────────────────────────────────
     try:
-        with open(wound_path, "rb") as f:
-            image_bytes = f.read()
-
-        base64_image = base64.b64encode(image_bytes).decode("utf-8")
-
-        # Detect MIME type from extension
-        ext_map = {
-            "jpg": "image/jpeg", "jpeg": "image/jpeg",
-            "png": "image/png", "webp": "image/webp",
-            "heic": "image/heic", "heif": "image/heif",
+        findings = analyze_wound_image(wound_path)
+    except Exception as e:
+        logger.error(f"[VisionAgent] CV analysis failed: {e}")
+        errors.append(f"VisionAgent CV analysis failed: {e}")
+        return {
+            **state,
+            "wound_severity": "NORMAL",
+            "wound_score": 0.0,
+            "redness_detected": False,
+            "swelling_detected": False,
+            "texture_change_detected": False,
+            "wound_analysis_summary": "Wound image could not be processed.",
+            "errors": errors,
         }
-        ext      = wound_path.rsplit(".", 1)[-1].lower()
-        mime     = ext_map.get(ext, "image/jpeg")
-        data_url = f"data:{mime};base64,{base64_image}"
 
-    except Exception as e:
-        logger.error(f"[VisionAgent] Failed to read image: {e}")
-        errors.append(f"VisionAgent image read failed: {e}")
-        return {**state, "wound_score": 0.0, "wound_severity": "NORMAL", "errors": errors}
-
-    # ── Call moondream via Ollama ─────────────────────────────────
-    try:
-        response = await vision_client.chat.completions.create(
-            model=VISION_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": data_url},
-                        },
-                        {
-                            "type": "text",
-                            "text": VISION_PROMPT,
-                        },
-                    ],
-                }
-            ],
-            max_tokens=250,
-            temperature=0.1,
-        )
-
-        raw_response = response.choices[0].message.content.strip()
-        logger.info(f"[VisionAgent] Raw response: {raw_response[:150]}")
-
-    except Exception as e:
-        logger.error(f"[VisionAgent] Vision model call failed: {e}")
-        errors.append(f"VisionAgent LLM call failed: {e}")
-        return {**state, "wound_score": 0.0, "wound_severity": "NORMAL", "errors": errors}
-
-    # ── Parse response locally ────────────────────────────────────
-    findings = _parse_vision_response(raw_response)
-
-    # ── Persist WoundAnalysis to DB ───────────────────────────────
+    # Persist to DB
     db: Session = SessionLocal()
     wound_analysis_id = None
     try:
@@ -229,10 +265,10 @@ async def vision_agent_node(state: AgentState) -> AgentState:
             check_in_id=state["check_in_id"],
             image_url=wound_path,
             severity=findings["severity"],
-            raw_llm_response=findings["raw_response"],
-            redness_detected=findings["redness"],
-            swelling_detected=findings["swelling"],
-            texture_change_detected=findings["texture_change"],
+            raw_llm_response=findings["raw_response"],  # reuse field for CV output
+            redness_detected=findings["redness_detected"],
+            swelling_detected=findings["swelling_detected"],
+            texture_change_detected=findings["texture_change_detected"],
             analysis_summary=findings["summary"],
             wound_score=findings["score"],
         )
@@ -256,9 +292,9 @@ async def vision_agent_node(state: AgentState) -> AgentState:
         "wound_severity":          findings["severity"].value,
         "wound_score":             findings["score"],
         "wound_analysis_id":       wound_analysis_id,
-        "redness_detected":        findings["redness"],
-        "swelling_detected":       findings["swelling"],
-        "texture_change_detected": findings["texture_change"],
+        "redness_detected":        findings["redness_detected"],
+        "swelling_detected":       findings["swelling_detected"],
+        "texture_change_detected": findings["texture_change_detected"],
         "wound_analysis_summary":  findings["summary"],
         "errors":                  errors,
     }
