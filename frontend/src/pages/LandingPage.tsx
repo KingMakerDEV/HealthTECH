@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import SplitText from '@/components/SplitText';
 
 // ===== Animations =====
 const fadeUp = {
@@ -148,10 +149,10 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
   const [isTransitioning, setIsTransitioning] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const autoRotateIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   const extendedTestimonials = [...testimonials, ...testimonials, ...testimonials];
   const totalSlides = testimonials.length;
-  
+
   const startAutoRotate = useCallback(() => {
     if (autoRotateIntervalRef.current) clearInterval(autoRotateIntervalRef.current);
     autoRotateIntervalRef.current = setInterval(() => {
@@ -160,14 +161,14 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
       }
     }, 2500);
   }, [isHovered, isTransitioning]);
-  
+
   useEffect(() => {
     startAutoRotate();
     return () => {
       if (autoRotateIntervalRef.current) clearInterval(autoRotateIntervalRef.current);
     };
   }, [startAutoRotate]);
-  
+
   useEffect(() => {
     if (currentIndex >= totalSlides * 2) {
       setTimeout(() => {
@@ -183,7 +184,7 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
       }, 300);
     }
   }, [currentIndex, totalSlides]);
-  
+
   const goToNext = () => {
     if (!isTransitioning) {
       setIsTransitioning(true);
@@ -191,7 +192,7 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
       setTimeout(() => setIsTransitioning(false), 500);
     }
   };
-  
+
   const goToPrev = () => {
     if (!isTransitioning) {
       setIsTransitioning(true);
@@ -199,7 +200,7 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
       setTimeout(() => setIsTransitioning(false), 500);
     }
   };
-  
+
   const goToSlide = (index: number) => {
     if (!isTransitioning) {
       setIsTransitioning(true);
@@ -207,7 +208,7 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
       setTimeout(() => setIsTransitioning(false), 500);
     }
   };
-  
+
   const getTranslateX = () => {
     if (!containerRef.current) return 0;
     const width = containerRef.current.offsetWidth;
@@ -217,23 +218,23 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
     const cardWidth = width / cardsPerView;
     return -(currentIndex * cardWidth);
   };
-  
+
   const dotIndex = Math.floor(currentIndex % totalSlides);
-  
+
   return (
-    <div 
+    <div
       className="relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="overflow-hidden">
-        <div 
+        <div
           ref={containerRef}
           className="flex transition-transform duration-500 ease-in-out"
           style={{ transform: `translateX(${getTranslateX()}px)` }}
         >
           {extendedTestimonials.map((testimonial, idx) => (
-            <div 
+            <div
               key={`${testimonial.id}-${idx}`}
               className="w-full md:w-1/2 lg:w-1/3 flex-shrink-0 px-2 sm:px-3"
             >
@@ -242,7 +243,7 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
           ))}
         </div>
       </div>
-      
+
       <button
         onClick={goToPrev}
         className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 md:-translate-x-4 lg:-translate-x-6 w-8 h-8 md:w-10 md:h-10 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-lg items-center justify-center hover:bg-background transition-colors z-10"
@@ -257,15 +258,15 @@ const TestimonialsCarousel = ({ testimonials }: { testimonials: Testimonial[] })
       >
         <ChevronRight size={20} />
       </button>
-      
+
       <div className="flex justify-center gap-2 mt-6 sm:mt-8">
         {testimonials.map((_, idx) => (
           <button
             key={idx}
             onClick={() => goToSlide(idx)}
             className={`h-2 rounded-full transition-all ${
-              idx === dotIndex 
-                ? 'w-6 sm:w-8 bg-primary' 
+              idx === dotIndex
+                ? 'w-6 sm:w-8 bg-primary'
                 : 'w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50'
             }`}
             aria-label={`Go to testimonial ${idx + 1}`}
@@ -340,7 +341,7 @@ const LandingPage = () => {
       comment: 'Parent communication has never been easier. Real-time updates give families peace of mind.',
     },
   ]);
-  
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newTestimonial, setNewTestimonial] = useState({
     name: '',
@@ -348,7 +349,10 @@ const LandingPage = () => {
     comment: '',
     rating: 5,
   });
-  
+
+  // 👇 NEW: state to force remount of SplitText on theme change
+  const [themeKey, setThemeKey] = useState(0);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll();
   const { scrollYProgress } = useScroll({ container: containerRef });
@@ -369,6 +373,21 @@ const LandingPage = () => {
     setNewTestimonial({ name: '', role: '', comment: '', rating: 5 });
     setIsAddDialogOpen(false);
   };
+
+  // 👇 NEW: detect theme changes and increment key to remount SplitText
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          setThemeKey(prev => prev + 1);
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, { attributes: true });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let lenis: any;
@@ -424,21 +443,43 @@ const LandingPage = () => {
                 <span>Intelligent Healthcare Platform</span>
               </motion.div>
 
-              <motion.h1
-                variants={fadeUp}
-                custom={1}
-                initial="hidden"
-                animate="visible"
-                className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.15] tracking-tight"
-              >
-                Healthcare that{' '}
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.15] tracking-tight text-center lg:text-left">
+                <SplitText
+                  key={`healthcare-${themeKey}`}
+                  text="Healthcare that"
+                  tag="span"
+                  className="inline-block"
+                  delay={80}
+                  duration={0.8}
+                  ease="power3.out"
+                  splitType="chars"
+                  from={{ opacity: 0, y: 60 }}
+                  to={{ opacity: 1, y: 0 }}
+                  threshold={0.2}
+                  rootMargin="-50px"
+                  textAlign="left"
+                />{' '}
                 <span className="relative inline-block">
                   <span className="gradient-text">watches over</span>
                   <span className="absolute -bottom-1 sm:-bottom-2 left-0 w-full h-0.5 sm:h-1 bg-gradient-to-r from-primary to-secondary rounded-full opacity-60" />
                 </span>
                 <br />
-                your patients
-              </motion.h1>
+                <SplitText
+                  key={`patients-${themeKey}`}
+                  text="your patients"
+                  tag="span"
+                  className="inline-block"
+                  delay={80}
+                  duration={0.8}
+                  ease="power3.out"
+                  splitType="chars"
+                  from={{ opacity: 0, y: 60 }}
+                  to={{ opacity: 1, y: 0 }}
+                  threshold={0.2}
+                  rootMargin="-50px"
+                  textAlign="left"
+                />
+              </h1>
 
               <motion.p
                 variants={fadeUp}
@@ -688,7 +729,7 @@ const LandingPage = () => {
                 See what doctors and care teams are saying about CARENETRA.
               </motion.p>
             </motion.div>
-            
+
             <div className="hidden sm:block absolute right-0 top-0 lg:top-2">
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
@@ -888,9 +929,9 @@ const LandingPage = () => {
         <div className="container mx-auto px-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <img 
-                src="/CareNetra.png" 
-                alt="CARENETRA Logo" 
+              <img
+                src="/CareNetra.png"
+                alt="CARENETRA Logo"
                 className="h-8 w-auto sm:h-10"
               />
               <span className="font-semibold text-lg sm:text-xl">CARENETRA</span>
