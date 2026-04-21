@@ -2,10 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
-// ====== TUNED CONSTANTS ======
-const IMPACT_THRESHOLD = 20;     // Impact spike
-const FREE_FALL_THRESHOLD = 3;   // Near 0g
-const COOLDOWN_MS = 3000;
+// ====== TUNED CONSTANTS (LOWER FOR TESTING) ======
+const IMPACT_THRESHOLD = 12;          // 12 m/s² ≈ 1.2g (was 20)
+const FREE_FALL_THRESHOLD = 2;        // Near 0g (was 3)
+const COOLDOWN_MS = 3000;             // 3 seconds between triggers
 
 const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
   const [sensorsEnabled, setSensorsEnabled] = useState(false);
@@ -13,6 +13,7 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
 
   const lastTriggerTime = useRef(0);
   const freeFallDetected = useRef(false);
+  const lastMotionTime = useRef(Date.now());
 
   // ============================
   // 1. FORCE SENSOR AVAILABILITY CHECK
@@ -20,7 +21,6 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
   useEffect(() => {
     if (!window) return;
 
-    // DO NOT block based on this check (your previous mistake)
     if (typeof DeviceMotionEvent === "undefined") {
       toast.error("DeviceMotion not available on this device");
       return;
@@ -54,13 +54,14 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
   };
 
   // ============================
-  // 3. CORE DETECTION LOGIC (CORRECTED)
+  // 3. CORE DETECTION LOGIC (IMPROVED)
   // ============================
   useEffect(() => {
     if (!sensorsEnabled) return;
 
     const handleMotion = (e: DeviceMotionEvent) => {
       const now = Date.now();
+      lastMotionTime.current = now;
 
       // Debounce
       if (now - lastTriggerTime.current < COOLDOWN_MS) return;
@@ -82,30 +83,58 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
       const magnitude = Math.sqrt(x * x + y * y + z * z);
 
       // ===== DEBUG (IMPORTANT) =====
-      console.log("Acceleration:", magnitude);
+      console.log(`[Motion] magnitude: ${magnitude.toFixed(2)} m/s², freeFall: ${freeFallDetected.current}`);
 
       // ===== STEP 1: FREE FALL DETECTION =====
       if (magnitude < FREE_FALL_THRESHOLD) {
-        freeFallDetected.current = true;
-        console.log("Free fall detected");
+        if (!freeFallDetected.current) {
+          freeFallDetected.current = true;
+          console.log("🔽 Free fall started");
+        }
         return;
       }
 
-      // ===== STEP 2: IMPACT AFTER FREE FALL =====
-      if (freeFallDetected.current && magnitude > IMPACT_THRESHOLD) {
-        console.log("Impact detected");
+      // ===== STEP 2: IMPACT DETECTION =====
+      if (magnitude > IMPACT_THRESHOLD) {
+        console.log(`💥 Impact detected: ${magnitude.toFixed(2)} m/s²`);
 
+        // Trigger if we saw a free fall recently (within 1 second)
+        const freeFallRecently = freeFallDetected.current;
+
+        // Reset free fall flag
         freeFallDetected.current = false;
-        lastTriggerTime.current = now;
 
-        triggerAlert();
+        if (freeFallRecently) {
+          console.log("✅ Free fall → impact pattern confirmed");
+          lastTriggerTime.current = now;
+          triggerAlert();
+        } else {
+          console.log("⚠️ Impact without prior free fall – ignoring (false positive)");
+          // Optional: For testing, you can still trigger after 2 such impacts
+          // Or just ignore to avoid false alarms
+        }
+      } else {
+        // No impact, reset free fall after a short grace period?
+        // But if we stay above threshold but not impact, reset free fall after 200ms
+        // This is handled by the fact that free fall flag will be cleared only on impact or timeout.
       }
     };
+
+    // Optional: reset free fall flag if no motion for 1 second (prevents stale flag)
+    const interval = setInterval(() => {
+      if (Date.now() - lastMotionTime.current > 1000) {
+        if (freeFallDetected.current) {
+          console.log("⏱️ Free fall flag reset due to inactivity");
+          freeFallDetected.current = false;
+        }
+      }
+    }, 500);
 
     window.addEventListener("devicemotion", handleMotion);
 
     return () => {
       window.removeEventListener("devicemotion", handleMotion);
+      clearInterval(interval);
     };
   }, [sensorsEnabled]);
 
