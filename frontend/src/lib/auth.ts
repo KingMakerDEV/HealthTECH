@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'DOCTOR' | 'PATIENT';
+  role: 'DOCTOR' | 'PATIENT' | 'VOLUNTEER';
   avatar?: string;
   patient_id?: string;
 }
@@ -29,4 +29,5 @@ export const isAuthenticated = (): boolean => !!getToken();
 
 export const getDashboardPath = (role: string): string => {
   return role === 'DOCTOR' ? '/doctor/dashboard' : '/patient/dashboard';
+  if (role === 'DOCTOR') return '/doctor/dashboard';
 };

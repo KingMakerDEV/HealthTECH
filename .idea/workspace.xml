@@ -3,9 +3,8 @@
   <component name="ChangeListManager">
     <list default="true" id="6d957359-ea33-43f4-9c51-a702b12d6c63" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/models/users.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/models/users.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/http_api/auth_routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/http_api/auth_routes.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/repositories/user_repo.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/repositories/user_repo.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/services/auth_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/auth_service.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -29,15 +28,16 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "nik1",
+    "last_opened_file_path": "C:/projects/healthTECH"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\projects\healthTECH\backend" />
