@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/DashboardLayout';
 import EmergencyBanner from '@/components/EmergencyBanner';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 
 const fadeUp = {
@@ -127,6 +128,7 @@ interface CourseItem {
 
 const DoctorDashboard = () => {
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
 
   // Main dashboard state
   const [dashData, setDashData]               = useState<DashboardResponse | null>(null);
@@ -155,7 +157,9 @@ const DoctorDashboard = () => {
 
   const fetchDashboard = async () => {
     try {
-      const res = await api.get('/doctor/dashboard');
+      const currentLang = i18n.resolvedLanguage || i18n.language || 'en';
+      const langCode = currentLang.split('-')[0];
+      const res = await api.get('/doctor/dashboard', { params: { language: langCode } });
       setDashData(res.data);
       setAlerts(res.data.active_alerts || []);
       if (res.data.patients?.length > 0 && !selectedPatientId) {
@@ -164,7 +168,7 @@ const DoctorDashboard = () => {
         fetchPatientDetail(firstId);
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to load dashboard');
+      toast.error(err.response?.data?.detail || t('common.loadError'));
     } finally {
       setLoading(false);
     }
@@ -173,7 +177,9 @@ const DoctorDashboard = () => {
   const fetchPatientDetail = async (patientId: string) => {
     setDetailLoading(true);
     try {
-      const res = await api.get(`/doctor/patient/${patientId}`);
+      const currentLang = i18n.resolvedLanguage || i18n.language || 'en';
+      const langCode = currentLang.split('-')[0];
+      const res = await api.get(`/doctor/patient/${patientId}`, { params: { language: langCode } });
       setDetail(res.data);
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Failed to load patient detail');
@@ -304,12 +310,12 @@ const DoctorDashboard = () => {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-          <p className="text-muted-foreground">Could not load dashboard data.</p>
+          <p className="text-muted-foreground">{t('doctorDashboard.loadError')}</p>
           <button
             onClick={() => { setLoading(true); fetchDashboard(); }}
             className="px-4 py-2 rounded-lg gradient-primary text-primary-foreground text-sm"
           >
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       </DashboardLayout>
@@ -338,25 +344,25 @@ const DoctorDashboard = () => {
           {/* ── Page header ──────────────────────────────────────────────────── */}
           <motion.div custom={0} variants={fadeUp} className="flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-xl font-bold text-foreground">Patient Overview</h1>
-              <p className="text-sm text-muted-foreground">{dashData.total_patients} patients monitored</p>
+              <h1 className="text-xl font-bold text-foreground">{t('doctorDashboard.title')}</h1>
+              <p className="text-sm text-muted-foreground">{t('doctorDashboard.patientsMonitored', { count: dashData.total_patients })}</p>
             </div>
             {/* Primary CTA — always visible */}
             <button
               onClick={() => navigate('/doctor/create-course')}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity shadow-md"
             >
-              <Plus size={15} /> New Course
+              <Plus size={15} /> {t('doctorDashboard.newCourse')}
             </button>
           </motion.div>
 
           {/* ── Stats ────────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Total Patients', value: dashData.total_patients, icon: Users,         color: 'text-primary' },
-              { label: 'Critical',       value: dashData.critical_count, icon: AlertTriangle, color: 'text-red-400' },
-              { label: 'High Risk',      value: dashData.high_risk_count,icon: Activity,      color: 'text-orange-400' },
-              { label: 'Stable',         value: dashData.stable_count,   icon: TrendingUp,    color: 'text-emerald-400' },
+              { label: t('doctorDashboard.totalPatients'), value: dashData.total_patients, icon: Users,         color: 'text-primary' },
+              { label: t('doctorDashboard.critical'),       value: dashData.critical_count, icon: AlertTriangle, color: 'text-red-400' },
+              { label: t('doctorDashboard.highRisk'),      value: dashData.high_risk_count,icon: Activity,      color: 'text-orange-400' },
+              { label: t('doctorDashboard.stable'),         value: dashData.stable_count,   icon: TrendingUp,    color: 'text-emerald-400' },
             ].map((stat, i) => (
               <motion.div key={stat.label} custom={i + 1} variants={fadeUp} className="glass-card p-4">
                 <div className="flex items-center justify-between mb-1">
@@ -375,14 +381,14 @@ const DoctorDashboard = () => {
 
               {/* List header */}
               <div className="flex items-center gap-2 mb-3">
-                <h2 className="font-semibold text-foreground text-sm flex-1">Patients</h2>
+                <h2 className="font-semibold text-foreground text-sm flex-1">{t('doctorDashboard.patients')}</h2>
                 {/* Add Patient button */}
                 <button
                   onClick={openAddPanel}
-                  title="Assign a course to a new patient by CNT-XXXXX ID"
+                  title={t('doctorDashboard.findPatientTitle')}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-primary/40 bg-primary/5 text-primary hover:bg-primary/15 transition-colors"
                 >
-                  <UserSearch size={13} /> Add Patient
+                  <UserSearch size={13} /> {t('doctorDashboard.addPatient')}
                 </button>
               </div>
 
@@ -400,9 +406,9 @@ const DoctorDashboard = () => {
                       {/* Panel header */}
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold text-foreground">
-                          {addPanelStep === 'search'      ? 'Find patient by ID'
-                           : addPanelStep === 'pick-course' ? 'Select a course to assign'
-                           : '✓ Assignment complete'}
+                          {addPanelStep === 'search'      ? t('doctorDashboard.findPatientTitle')
+                           : addPanelStep === 'pick-course' ? t('doctorDashboard.selectCourseAssign')
+                           : t('doctorDashboard.assignmentComplete')}
                         </p>
                         <button onClick={closeAddPanel} className="text-muted-foreground hover:text-foreground">
                           <X size={13} />
@@ -430,13 +436,13 @@ const DoctorDashboard = () => {
                             </button>
                           </div>
                           <p className="text-[10px] text-muted-foreground">
-                            Ask the patient to share their ID from their dashboard.
+                            {t('doctorDashboard.askPatientShare')}
                           </p>
                           <button
                             onClick={() => navigate('/doctor/create-course')}
                             className="w-full text-xs text-primary hover:underline flex items-center justify-center gap-1 py-1"
                           >
-                            <Plus size={11} /> Create a new course instead
+                            <Plus size={11} /> {t('doctorDashboard.createNewInstead')}
                           </button>
                         </div>
                       )}
@@ -460,7 +466,7 @@ const DoctorDashboard = () => {
                           {unassignedCourses.length > 0 ? (
                             <div className="space-y-1 max-h-40 overflow-y-auto">
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-                                Your unassigned courses
+                                {t('doctorDashboard.unassignedCourses')}
                               </p>
                               {unassignedCourses.map(course => (
                                 <button
@@ -483,7 +489,7 @@ const DoctorDashboard = () => {
                             </div>
                           ) : (
                             <div className="text-center py-2">
-                              <p className="text-xs text-muted-foreground">No unassigned courses.</p>
+                              <p className="text-xs text-muted-foreground">{t('doctorDashboard.noUnassignedCourses')}</p>
                             </div>
                           )}
 
@@ -492,7 +498,7 @@ const DoctorDashboard = () => {
                               onClick={() => navigate('/doctor/create-course')}
                               className="flex-1 py-2 rounded-lg border border-border text-xs text-foreground hover:bg-muted flex items-center justify-center gap-1"
                             >
-                              <BookOpen size={11} /> New Course
+                              <BookOpen size={11} /> {t('doctorDashboard.newCourse')}
                             </button>
                             <button
                               onClick={assignCourseToPatient}
@@ -503,7 +509,7 @@ const DoctorDashboard = () => {
                                 ? <Loader2 size={11} className="animate-spin" />
                                 : <ChevronRight size={11} />
                               }
-                              {assigning ? 'Assigning...' : 'Assign'}
+                              {assigning ? t('doctorDashboard.assigning') : t('doctorDashboard.assign')}
                             </button>
                           </div>
                         </div>
@@ -516,7 +522,7 @@ const DoctorDashboard = () => {
                             <Check size={12} className="text-emerald-400" />
                           </div>
                           <p className="text-xs text-foreground">
-                            Course assigned to <strong>{foundPatient?.full_name}</strong>. Dashboard refreshing...
+                            {t('doctorDashboard.courseAssignedRefreshing', { name: foundPatient?.full_name })}
                           </p>
                         </div>
                       )}
@@ -531,7 +537,7 @@ const DoctorDashboard = () => {
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  placeholder="Search assigned patients..."
+                  placeholder={t('doctorDashboard.searchAssigned')}
                   className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-muted border border-border text-foreground text-xs placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring/30"
                 />
               </div>
@@ -572,12 +578,12 @@ const DoctorDashboard = () => {
                   </button>
                 )) : (
                   <div className="text-center py-8 space-y-2">
-                    <p className="text-sm text-muted-foreground">No patients assigned yet.</p>
+                    <p className="text-sm text-muted-foreground">{t('doctorDashboard.noPatientsAssigned')}</p>
                     <button
                       onClick={() => navigate('/doctor/create-course')}
                       className="text-xs text-primary hover:underline flex items-center gap-1 mx-auto"
                     >
-                      <Plus size={11} /> Create your first course
+                      <Plus size={11} /> {t('doctorDashboard.createFirstCourse')}
                     </button>
                   </div>
                 )}
@@ -622,7 +628,7 @@ const DoctorDashboard = () => {
                   {/* Risk score trend chart */}
                   {chartData.length > 0 && (
                     <div className="glass-card p-5">
-                      <h3 className="text-sm font-semibold text-foreground mb-4">Risk Score Trend</h3>
+                      <h3 className="text-sm font-semibold text-foreground mb-4">{t('doctorDashboard.riskScoreTrend')}</h3>
                       <div className="h-52">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={chartData}>
@@ -653,7 +659,7 @@ const DoctorDashboard = () => {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="glass-card p-5">
                       <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <Activity size={14} className="text-primary" /> Condition Metrics
+                        <Activity size={14} className="text-primary" /> {t('doctorDashboard.conditionMetrics')}
                       </h3>
                       <div className="space-y-2">
                         {Object.entries(detail.condition_metrics || {}).map(([key, metric]) => (
@@ -675,7 +681,7 @@ const DoctorDashboard = () => {
 
                     <div className="glass-card p-5">
                       <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <Clock size={14} className="text-primary" /> Recent Check-ins
+                        <Clock size={14} className="text-primary" /> {t('doctorDashboard.recentCheckins')}
                       </h3>
                       <div className="space-y-2.5">
                         {detail.recent_check_ins?.slice(0, 5).map(c => (
@@ -696,7 +702,7 @@ const DoctorDashboard = () => {
                           </div>
                         ))}
                         {(!detail.recent_check_ins || detail.recent_check_ins.length === 0) && (
-                          <p className="text-xs text-muted-foreground">No check-ins yet.</p>
+                          <p className="text-xs text-muted-foreground">{t('doctorDashboard.noCheckinsYet')}</p>
                         )}
                       </div>
                     </div>
@@ -706,7 +712,7 @@ const DoctorDashboard = () => {
                   {detail.medications?.length > 0 && (
                     <div className="glass-card p-5">
                       <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                        <Pill size={14} className="text-primary" /> Medications
+                        <Pill size={14} className="text-primary" /> {t('doctorDashboard.medications')}
                       </h3>
                       <div className="grid sm:grid-cols-2 gap-2">
                         {detail.medications.map(m => (
@@ -725,7 +731,7 @@ const DoctorDashboard = () => {
                   {detail.recent_wounds?.length > 0 && (
                     <div className="glass-card p-5 border-l-4 border-l-orange-400">
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <Camera size={14} className="text-orange-400" /> Recent AI Wound Analysis
+                        <Camera size={14} className="text-orange-400" /> {t('doctorDashboard.recentWoundAnalysis')}
                       </h3>
                       <div className="space-y-4">
                         {detail.recent_wounds.map((w) => (
@@ -746,14 +752,14 @@ const DoctorDashboard = () => {
                             <div className="flex-1 min-w-0 flex flex-col justify-center">
                               <div className="flex items-center justify-between gap-2 mb-1.5">
                                 <h4 className="text-sm font-semibold text-foreground truncate">
-                                  Severity: {w.severity}
+                                  {t('doctorDashboard.severity')}: {w.severity}
                                 </h4>
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                   w.wound_score > 7 ? 'bg-red-500/10 text-red-500' :
                                   w.wound_score > 3 ? 'bg-orange-500/10 text-orange-400' :
                                   'bg-emerald-500/10 text-emerald-400'
                                 }`}>
-                                  Score: {w.wound_score.toFixed(1)}/10
+                                  {t('doctorDashboard.score')}: {w.wound_score.toFixed(1)}/10
                                 </span>
                               </div>
                               
@@ -764,13 +770,13 @@ const DoctorDashboard = () => {
                               {/* Badges */}
                               <div className="flex flex-wrap gap-1.5 mt-auto">
                                 <span className={`text-[10px] px-2 py-0.5 rounded border ${w.redness ? 'border-red-400/30 bg-red-400/10 text-red-400' : 'border-border/50 text-muted-foreground'}`}>
-                                  {w.redness ? 'Redness Detected' : 'No Redness'}
+                                  {w.redness ? t('doctorDashboard.rednessDetected') : t('doctorDashboard.noRedness')}
                                 </span>
                                 <span className={`text-[10px] px-2 py-0.5 rounded border ${w.swelling ? 'border-orange-400/30 bg-orange-400/10 text-orange-400' : 'border-border/50 text-muted-foreground'}`}>
-                                  {w.swelling ? 'Swelling Detected' : 'No Swelling'}
+                                  {w.swelling ? t('doctorDashboard.swellingDetected') : t('doctorDashboard.noSwelling')}
                                 </span>
                                 <span className={`text-[10px] px-2 py-0.5 rounded border ${w.texture_change ? 'border-yellow-400/30 bg-yellow-400/10 text-yellow-400' : 'border-border/50 text-muted-foreground'}`}>
-                                  {w.texture_change ? 'Texture Change' : 'Normal Texture'}
+                                  {w.texture_change ? t('doctorDashboard.textureChange') : t('doctorDashboard.normalTexture')}
                                 </span>
                               </div>
                             </div>
@@ -786,13 +792,13 @@ const DoctorDashboard = () => {
 
                   {/* Send message */}
                   <div className="glass-card p-5">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">Send Message to Patient</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-3">{t('doctorDashboard.sendMessage')}</h3>
                     <div className="flex gap-2">
                       <input
                         value={messageText}
                         onChange={e => setMessageText(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                        placeholder="Type a message for the patient..."
+                        placeholder={t('doctorDashboard.typeMessage')}
                         className="flex-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring/30"
                       />
                       <button

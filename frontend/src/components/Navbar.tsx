@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X, Sun, Moon, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getUser, clearAuth, isAuthenticated, getDashboardPath } from '@/lib/auth';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 const Navbar = () => {
+  const { t } = useTranslation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(document.documentElement.classList.contains('dark'));
   const navigate = useNavigate();
@@ -28,25 +31,26 @@ const Navbar = () => {
           <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-sm">C</span>
           </div>
-          <span className="font-bold text-xl text-foreground">CARENETRA</span>
+          <span className="font-bold text-xl text-foreground uppercase tracking-tight">{t('header.title')}</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-6">
           {!authed ? (
             <>
-              <Link to="/#features" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">Features</Link>
-              <Link to="/#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">How it works</Link>
-              <Link to="/login" className="text-sm font-medium text-foreground">Sign in</Link>
-              <Link to="/register" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">Get Started</Link>
+              <Link to="/#features" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">{t('header.features')}</Link>
+              <Link to="/#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">{t('header.howItWorks')}</Link>
+              <Link to="/login" className="text-sm font-medium text-foreground">{t('header.signIn')}</Link>
+              <Link to="/register" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">{t('header.getStarted')}</Link>
             </>
           ) : (
             <>
-              <Link to={getDashboardPath(user?.role || 'PATIENT')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
-              <Link to={`/${user?.role?.toLowerCase()}/profile`} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Profile</Link>
+              <Link to={getDashboardPath(user?.role || 'PATIENT')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">{t('nav.dashboard')}</Link>
+              <Link to={`/${user?.role?.toLowerCase()}/profile`} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">{t('nav.profile')}</Link>
               <span className="text-sm text-muted-foreground">{user?.name}</span>
               <button onClick={handleLogout} className="text-muted-foreground hover:text-destructive transition-colors"><LogOut size={18} /></button>
             </>
           )}
+          <LanguageSwitcher />
           <button onClick={toggleDark} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground">
             {dark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
@@ -73,14 +77,14 @@ const Navbar = () => {
             <div className="p-4 flex flex-col gap-3">
               {!authed ? (
                 <>
-                  <Link to="/login" onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2">Sign in</Link>
-                  <Link to="/register" onClick={() => setMobileOpen(false)} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium text-center">Get Started</Link>
+                  <Link to="/login" onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2">{t('header.signIn')}</Link>
+                  <Link to="/register" onClick={() => setMobileOpen(false)} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium text-center">{t('header.getStarted')}</Link>
                 </>
               ) : (
                 <>
-                  <Link to={getDashboardPath(user?.role || 'PATIENT')} onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2">Dashboard</Link>
-                  <Link to={`/${user?.role?.toLowerCase()}/profile`} onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2">Profile</Link>
-                  <button onClick={() => { handleLogout(); setMobileOpen(false); }} className="text-sm font-medium py-2 text-destructive text-left">Log out</button>
+                  <Link to={getDashboardPath(user?.role || 'PATIENT')} onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2">{t('nav.dashboard')}</Link>
+                  <Link to={`/${user?.role?.toLowerCase()}/profile`} onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2">{t('nav.profile')}</Link>
+                  <button onClick={() => { handleLogout(); setMobileOpen(false); }} className="text-sm font-medium py-2 text-destructive text-left">{t('header.logout')}</button>
                 </>
               )}
             </div>

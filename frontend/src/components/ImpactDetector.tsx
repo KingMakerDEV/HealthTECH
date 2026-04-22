@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 
 // ====== TUNED CONSTANTS (LOWER FOR TESTING) ======
@@ -8,6 +9,7 @@ const FREE_FALL_THRESHOLD = 2;        // Near 0g (was 3)
 const COOLDOWN_MS = 3000;             // 3 seconds between triggers
 
 const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
+  const { t } = useTranslation();
   const [sensorsEnabled, setSensorsEnabled] = useState(false);
   const [showEnableBtn, setShowEnableBtn] = useState(false);
 
@@ -22,7 +24,6 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
     if (!window) return;
 
     if (typeof DeviceMotionEvent === "undefined") {
-      toast.error("DeviceMotion not available on this device");
       return;
     }
 
@@ -46,10 +47,10 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
 
       setSensorsEnabled(true);
       setShowEnableBtn(false);
-      toast.success("Sensors activated");
+      toast.success(t('common.success'));
 
     } catch (e) {
-      toast.error("Sensor activation failed");
+      toast.error(t('common.error'));
     }
   };
 
@@ -82,22 +83,16 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
 
       const magnitude = Math.sqrt(x * x + y * y + z * z);
 
-      // ===== DEBUG (IMPORTANT) =====
-      console.log(`[Motion] magnitude: ${magnitude.toFixed(2)} m/s², freeFall: ${freeFallDetected.current}`);
-
       // ===== STEP 1: FREE FALL DETECTION =====
       if (magnitude < FREE_FALL_THRESHOLD) {
         if (!freeFallDetected.current) {
           freeFallDetected.current = true;
-          console.log("🔽 Free fall started");
         }
         return;
       }
 
       // ===== STEP 2: IMPACT DETECTION =====
       if (magnitude > IMPACT_THRESHOLD) {
-        console.log(`💥 Impact detected: ${magnitude.toFixed(2)} m/s²`);
-
         // Trigger if we saw a free fall recently (within 1 second)
         const freeFallRecently = freeFallDetected.current;
 
@@ -105,26 +100,15 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
         freeFallDetected.current = false;
 
         if (freeFallRecently) {
-          console.log("✅ Free fall → impact pattern confirmed");
           lastTriggerTime.current = now;
           triggerAlert();
-        } else {
-          console.log("⚠️ Impact without prior free fall – ignoring (false positive)");
-          // Optional: For testing, you can still trigger after 2 such impacts
-          // Or just ignore to avoid false alarms
         }
-      } else {
-        // No impact, reset free fall after a short grace period?
-        // But if we stay above threshold but not impact, reset free fall after 200ms
-        // This is handled by the fact that free fall flag will be cleared only on impact or timeout.
       }
     };
 
-    // Optional: reset free fall flag if no motion for 1 second (prevents stale flag)
     const interval = setInterval(() => {
       if (Date.now() - lastMotionTime.current > 1000) {
         if (freeFallDetected.current) {
-          console.log("⏱️ Free fall flag reset due to inactivity");
           freeFallDetected.current = false;
         }
       }
@@ -142,7 +126,7 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
   // 4. ALERT TRIGGER
   // ============================
   const triggerAlert = useCallback(async () => {
-    toast.error("Impact Detected!");
+    toast.error(t('emergency.emergencyAlert'));
 
     let lat = null;
     let lng = null;
@@ -168,31 +152,39 @@ const ImpactDetector = ({ patientName, patientPhone, userId }: any) => {
         reported_by_user_id: userId,
       });
 
-      toast.success("Emergency alert sent");
+      toast.success(t('common.success'));
 
     } catch {
-      toast.error("Failed to send alert");
+      toast.error(t('common.error'));
     }
 
-  }, [patientName, patientPhone, userId]);
+  }, [patientName, patientPhone, userId, t]);
 
   // ============================
   // UI
   // ============================
   return (
-    <div style={{ position: "fixed", bottom: 20, left: 20, zIndex: 9999 }}>
+    <div className="fixed bottom-24 left-4 z-40 flex flex-col gap-2">
       {showEnableBtn && (
-        <button onClick={enableSensors}>
-          Enable Fall Detection
+        <button 
+          onClick={enableSensors}
+          className="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-lg hover:bg-orange-600 transition-colors"
+        >
+          {t('emergency.enableProtection')}
         </button>
       )}
 
       {sensorsEnabled && (
-        <div>Monitoring Active</div>
+        <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm border border-emerald-500/20">
+          {t('emergency.shieldActive')}
+        </div>
       )}
 
-      <button onClick={triggerAlert}>
-        🚨 SOS
+      <button 
+        onClick={triggerAlert}
+        className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
+      >
+        <span className="font-bold text-xs">{t('emergency.sos')}</span>
       </button>
     </div>
   );

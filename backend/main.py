@@ -14,6 +14,9 @@ from app.models.models import (
     DoctorMessage, AgentSession, MonitoringSchedule,
 )
 
+# Create database tables automatically
+Base.metadata.create_all(bind=engine)
+
 # Routers
 from app.routers.auth import router as auth_router
 from app.routers.patient import router as patient_router
@@ -36,7 +39,11 @@ def create_app() -> FastAPI:
     # ── CORS ──
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["https://health-tech-amber.vercel.app"],
+        allow_origins=[
+            "http://localhost:8080",
+            "http://localhost:5173",
+            "https://health-tech-amber.vercel.app"
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

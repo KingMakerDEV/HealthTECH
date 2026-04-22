@@ -5,6 +5,7 @@ import {
   Loader2, MessageSquare, Bell, Camera, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import DashboardLayout from '@/components/DashboardLayout';
 import { getUser } from '@/lib/auth';
 import api, { conversationApi } from '@/lib/api';
@@ -61,6 +62,7 @@ interface Message {
 }
 
 const PatientDashboard = () => {
+  const { t, i18n } = useTranslation();
   const user = getUser();
   const [data, setData]         = useState<DashboardData | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -76,10 +78,11 @@ const PatientDashboard = () => {
 
   const fetchDashboard = async () => {
     try {
-      const res = await api.get('/patient/dashboard');
+      const currentLang = i18n.resolvedLanguage || i18n.language || 'en';
+      const res = await api.get('/patient/dashboard', { params: { language: currentLang.split('-')[0] } });
       setData(res.data);
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to load dashboard');
+      toast.error(err.response?.data?.detail || t('common.loadError'));
     } finally {
       setLoading(false);
     }
@@ -95,7 +98,7 @@ const PatientDashboard = () => {
   const copyId = () => {
     navigator.clipboard.writeText(data?.unique_uid || '');
     setCopied(true);
-    toast.success('Patient ID copied!');
+    toast.success(t('patient.copySuccess'));
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -111,19 +114,19 @@ const PatientDashboard = () => {
 
     setUploadingWound(true);
     try {
-      toast.info('Analyzing wound photo...');
+      toast.info(t('chat.uploadWound'));
       const res = await conversationApi.dashboardUploadWound(file);
       
       // Update ui based on severity
       if (res.data.status === 'success' || res.data.check_in_id) {
-        toast.success(res.data.friendly_message || 'Wound analysis complete! Your doctor has been updated.');
+        toast.success(res.data.friendly_message || t('common.success'));
         // Refresh dashboard to show updated status
         fetchDashboard();
       } else {
-        toast.success('Photo uploaded successfully.');
+        toast.success(t('common.success'));
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to upload photo');
+      toast.error(err.response?.data?.detail || t('common.error'));
     } finally {
       setUploadingWound(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -144,20 +147,20 @@ const PatientDashboard = () => {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-          <p className="text-muted-foreground">Could not load dashboard data.</p>
+          <p className="text-muted-foreground">{t('common.loadError')}</p>
           <button
             onClick={() => { setLoading(true); fetchDashboard(); }}
             className="px-4 py-2 rounded-lg gradient-primary text-primary-foreground text-sm"
           >
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       </DashboardLayout>
     );
   }
 
-  const greeting = new Date().getHours() < 12 ? 'Good morning' :
-                   new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening';
+  const hours = new Date().getHours();
+  const greetingKey = hours < 12 ? 'greet.morning' : hours < 17 ? 'greet.afternoon' : 'greet.evening';
 
   return (
     <DashboardLayout>
@@ -168,14 +171,14 @@ const PatientDashboard = () => {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-primary-foreground">
-                {greeting}, {data.full_name.split(' ')[0]}! 👋
+                {t(greetingKey)}, {data.full_name.split(' ')[0]}! 👋
               </h1>
               <p className="text-primary-foreground/80 text-sm mt-1">
-                Health status: <span className="font-medium">{data.health_status}</span>
+                {t('patient.healthStatus')}: <span className="font-medium">{data.health_status}</span>
               </p>
               {data.last_check_in && (
                 <p className="text-primary-foreground/60 text-xs mt-0.5">
-                  Last check-in: {new Date(data.last_check_in).toLocaleDateString()}
+                  {t('patient.lastCheckin')}: {new Date(data.last_check_in).toLocaleDateString()}
                 </p>
               )}
             </div>
@@ -201,7 +204,7 @@ const PatientDashboard = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground mb-0.5">
-                  CARA has a check-in waiting for you
+                  {t('chat.nudgeTitle')}
                 </p>
                 <p className="text-sm text-muted-foreground line-clamp-2">
                   {data.pending_question.question}
@@ -210,7 +213,7 @@ const PatientDashboard = () => {
                   onClick={openAgentChat}
                   className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
                 >
-                  Open check-in <ChevronRight size={12} />
+                  {t('chat.openCheckin')} <ChevronRight size={12} />
                 </button>
               </div>
             </div>
@@ -229,8 +232,8 @@ const PatientDashboard = () => {
                   <MessageSquare size={16} className="text-primary-foreground" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-foreground">Start Check-in</p>
-                  <p className="text-xs text-muted-foreground">General symptoms & recovery</p>
+                  <p className="text-sm font-semibold text-foreground">{t('chat.startCheckin')}</p>
+                  <p className="text-xs text-muted-foreground">{t('chat.symptomsDesc')}</p>
                 </div>
               </div>
               <ChevronRight size={18} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
@@ -246,8 +249,8 @@ const PatientDashboard = () => {
                   {uploadingWound ? <Loader2 size={16} className="text-white animate-spin" /> : <Camera size={16} className="text-white" />}
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-foreground">Upload Wound Photo</p>
-                  <p className="text-xs text-muted-foreground">Let AI analyze a quick snapshot</p>
+                  <p className="text-sm font-semibold text-foreground">{t('chat.uploadWound')}</p>
+                  <p className="text-xs text-muted-foreground">{t('chat.woundDesc')}</p>
                 </div>
               </div>
               <Upload size={18} className="text-muted-foreground group-hover:text-orange-400 transition-colors shrink-0" />
@@ -266,14 +269,14 @@ const PatientDashboard = () => {
           {/* ── Active Course ───────────────────────────────────────────────── */}
           <motion.div custom={2} variants={fadeUp} className="lg:col-span-2 glass-card p-6">
             <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Activity size={18} className="text-primary" /> Active Course
+              <Activity size={18} className="text-primary" /> {t('patient.activeCourse')}
             </h2>
             {data.active_course ? (
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-medium text-foreground">{data.active_course.course_name}</p>
-                    <p className="text-sm text-muted-foreground">by {data.active_course.doctor_name}</p>
+                    <p className="text-sm text-muted-foreground">{t('patient.by')} {data.active_course.doctor_name}</p>
                   </div>
                   <span className="text-sm font-medium text-primary">{data.active_course.progress_pct}%</span>
                 </div>
@@ -295,10 +298,10 @@ const PatientDashboard = () => {
             ) : (
               <div className="flex flex-col items-center justify-center py-6 gap-2">
                 <p className="text-sm text-muted-foreground text-center">
-                  No active course assigned yet.
+                  {t('patient.noCourse')}
                 </p>
                 <p className="text-xs text-muted-foreground text-center">
-                  Share your Patient ID (<span className="font-mono text-foreground">{data.unique_uid}</span>) with your doctor.
+                  {t('patient.shareId')} (<span className="font-mono text-foreground">{data.unique_uid}</span>)
                 </p>
               </div>
             )}
@@ -307,7 +310,7 @@ const PatientDashboard = () => {
           {/* ── Medications today ────────────────────────────────────────────── */}
           <motion.div custom={3} variants={fadeUp} className="glass-card p-6">
             <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Pill size={18} className="text-secondary" /> Medications
+              <Pill size={18} className="text-secondary" /> {t('patient.medications')}
             </h2>
             <div className="space-y-3">
               {data.medications_today.length > 0 ? (
@@ -321,7 +324,7 @@ const PatientDashboard = () => {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No medications prescribed yet.</p>
+                <p className="text-sm text-muted-foreground">{t('patient.noMeds')}</p>
               )}
             </div>
           </motion.div>
@@ -330,10 +333,10 @@ const PatientDashboard = () => {
         {/* ── Doctor Messages ────────────────────────────────────────────────── */}
         <motion.div custom={4} variants={fadeUp} className="glass-card p-6">
           <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-            <MessageSquare size={18} className="text-primary" /> Doctor Messages
+            <MessageSquare size={18} className="text-primary" /> {t('patient.messages')}
             {data.unread_messages > 0 && (
               <span className="ml-auto text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
-                {data.unread_messages} new
+                {data.unread_messages} {t('patient.newMessages')}
               </span>
             )}
           </h2>
@@ -351,7 +354,7 @@ const PatientDashboard = () => {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No messages yet.</p>
+              <p className="text-sm text-muted-foreground">{t('patient.noMessages')}</p>
             )}
           </div>
         </motion.div>

@@ -62,6 +62,7 @@ def _tier_to_health_status(tier: Optional[str]) -> str:
 
 @router.get("/dashboard")
 def get_patient_dashboard(
+    language: str = "en",
     current_user: User    = Depends(require_patient),
     db:           Session = Depends(get_db),
 ):
@@ -158,9 +159,22 @@ def get_patient_dashboard(
 
     pending_q = None
     if pending_session:
+        # Translate dynamic agent questions on the fly if needed
+        question_text = pending_session.pending_question
+        
+        # Try to avoid translating if we already know it's the requested language
+        session_lang = getattr(pending_session, 'language', 'en') 
+        
+        if language != session_lang:
+            try:
+                from app.services.translation_service import translation_service
+                question_text = translation_service.translate_text(question_text, language)
+            except Exception as e:
+                logger.error(f"Failed to translate dashboard pending question: {e}")
+
         pending_q = {
             "session_id": pending_session.id,
-            "question":   pending_session.pending_question,
+            "question":   question_text,
             "options":    pending_session.pending_options,
             "trigger":    pending_session.trigger,
         }

@@ -32,12 +32,14 @@ api.interceptors.response.use(
 export const conversationApi = {
   getActive: () => api.get('/patient/conversation/active'),
 
-  start: () => api.post('/patient/conversation/start'),
+  start: (language: string = 'en') => 
+    api.post('/patient/conversation/start', {}, { params: { language } }),
 
-  answer: (sessionId: string, questionId: string, answer: string) =>
+  answer: (sessionId: string, questionId: string, answer: string, language: string = 'en') =>
     api.post(`/patient/conversation/${sessionId}/answer`, {
       question_id: questionId,
       answer,
+      language,
     }),
 
   uploadWound: (sessionId: string, file: File) => {

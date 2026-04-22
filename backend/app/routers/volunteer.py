@@ -66,6 +66,7 @@ def volunteer_heartbeat(
 
 @router.get("/dashboard")
 def get_volunteer_dashboard(
+    language: str = "en",
     current_user: User    = Depends(get_current_user),
     db:           Session = Depends(get_db),
 ):
