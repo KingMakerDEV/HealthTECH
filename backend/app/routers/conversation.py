@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -375,6 +376,7 @@ async def submit_answer(
         "answered_at": datetime.now(timezone.utc).isoformat(),
     })
     session.conversation = updated_conversation
+    flag_modified(session, "conversation")
 
     if result["should_submit"]:
         # Conversation complete; run pipeline now
@@ -452,6 +454,7 @@ async def upload_wound_photo(
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     })
     session.conversation = conversation
+    flag_modified(session, "conversation")
     db.commit()
 
     logger.info(f"[Conversation] Wound photo saved: {path}")

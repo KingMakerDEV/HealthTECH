@@ -30,7 +30,8 @@ const LoginPage = () => {
         id: user_id,
         role: role,
         name: full_name,
-        unique_uid: unique_uid
+        unique_uid: unique_uid,
+        email: formData.email
       };
 
       setAuth(access_token, userObj);

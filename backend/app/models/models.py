@@ -299,6 +299,7 @@ class ImpactAlert(Base):
     sms_sent:            Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     responder: Mapped["VolunteerProfile"] = relationship(
         "VolunteerProfile", back_populates="responses",
