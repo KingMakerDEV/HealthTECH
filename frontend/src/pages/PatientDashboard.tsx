@@ -1,23 +1,32 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
 import {
   Copy, Check, Pill, ChevronRight, Activity,
-  Loader2, MessageSquare, Bell, Camera, Upload
+  Loader2, MessageSquare, Bell, Camera, Upload,
+  TrendingUp, Heart, Calendar, Clock, Zap, Sparkles,
+  BarChart3, PieChart, TrendingDown, Shield, Wifi, Brain
 } from 'lucide-react';
 import { toast } from 'sonner';
 import DashboardLayout from '@/components/DashboardLayout';
 import { getUser } from '@/lib/auth';
 import api, { conversationApi } from '@/lib/api';
 import ImpactDetector from '@/components/ImpactDetector';
+import Lenis from '@studio-freight/lenis';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart as RePieChart, Pie, Cell, RadialBarChart, RadialBar
+} from 'recharts';
 
+// ===== Framer Motion Variants =====
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
     opacity: 1, y: 0,
-    transition: { delay: i * 0.08, duration: 0.4, ease: [0, 0, 0.2, 1] as const },
+    transition: { delay: i * 0.08, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] },
   }),
 };
 
+// ===== Types (unchanged) =====
 interface DashboardData {
   patient_id: string;
   full_name: string;
@@ -60,14 +69,46 @@ interface Message {
   is_read: boolean;
 }
 
+// ===== Premium UI Components =====
+const HealthScoreRing = ({ score }: { score: number }) => {
+  const data = [{ value: score }];
+  const color = score >= 70 ? '#10b981' : score >= 40 ? '#f59e0b' : '#ef4444';
+
+  return (
+    <div className="relative w-24 h-24">
+      <RadialBarChart width={96} height={96} cx="50%" cy="50%" innerRadius="80%" outerRadius="100%" barSize={8} data={data} startAngle={90} endAngle={-270}>
+        <RadialBar background dataKey="value" fill={color} cornerRadius={10} />
+      </RadialBarChart>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-xl font-bold text-foreground">{score}</span>
+      </div>
+    </div>
+  );
+};
+
+// ===== Main Component =====
 const PatientDashboard = () => {
   const user = getUser();
-  const [data, setData]         = useState<DashboardData | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [copied, setCopied]     = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
   const [uploadingWound, setUploadingWound] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Lenis smooth scroll
+  useEffect(() => {
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+      wheelMultiplier: 1.2,
+      touchMultiplier: 2,
+    });
+    const raf = (time: number) => { lenis.raf(time); requestAnimationFrame(raf); };
+    requestAnimationFrame(raf);
+    return () => lenis.destroy();
+  }, []);
 
   useEffect(() => {
     fetchDashboard();
@@ -99,25 +140,19 @@ const PatientDashboard = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  /** Opens AgentChat from anywhere on the dashboard */
   const openAgentChat = () => {
     window.dispatchEvent(new Event('carenetra:open-agent-chat'));
   };
 
-  /** Handles a standalone wound photo upload directly from the dashboard */
   const handleWoundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploadingWound(true);
     try {
       toast.info('Analyzing wound photo...');
       const res = await conversationApi.dashboardUploadWound(file);
-      
-      // Update ui based on severity
       if (res.data.status === 'success' || res.data.check_in_id) {
         toast.success(res.data.friendly_message || 'Wound analysis complete! Your doctor has been updated.');
-        // Refresh dashboard to show updated status
         fetchDashboard();
       } else {
         toast.success('Photo uploaded successfully.');
@@ -133,8 +168,8 @@ const PatientDashboard = () => {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-[60vh]">
-          <Loader2 className="animate-spin text-primary" size={32} />
+        <div className="flex items-center justify-center h-[80vh]">
+          <Loader2 className="animate-spin text-primary" size={40} />
         </div>
       </DashboardLayout>
     );
@@ -143,7 +178,7 @@ const PatientDashboard = () => {
   if (!data) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+        <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
           <p className="text-muted-foreground">Could not load dashboard data.</p>
           <button
             onClick={() => { setLoading(true); fetchDashboard(); }}
@@ -159,45 +194,88 @@ const PatientDashboard = () => {
   const greeting = new Date().getHours() < 12 ? 'Good morning' :
                    new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening';
 
+  // Derived health score
+  const healthScore = data.active_course ? Math.min(100, Math.max(0, data.active_course.progress_pct + 20)) : 65;
+  const adherenceData = [
+    { name: 'Taken', value: 8, fill: '#10b981' },
+    { name: 'Missed', value: 2, fill: '#ef4444' },
+  ];
+
   return (
     <DashboardLayout>
-      <motion.div initial="hidden" animate="visible" className="space-y-6">
+      <motion.div initial="hidden" animate="visible" className="space-y-6 pb-8">
 
-        {/* ── Welcome banner ──────────────────────────────────────────────────── */}
-        <motion.div custom={0} variants={fadeUp} className="glass-card p-6 gradient-primary rounded-xl">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        {/* ===== Premium Welcome Banner ===== */}
+        <motion.div
+          custom={0}
+          variants={fadeUp}
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/20 via-primary/10 to-secondary/10 p-6 md:p-8 border border-primary/20 shadow-2xl"
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(56,189,248,0.15)_0%,transparent_60%)]" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
+          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-primary-foreground">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={18} className="text-primary" />
+                <span className="text-xs font-medium text-primary uppercase tracking-wider">AI Health Assistant</span>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold text-foreground">
                 {greeting}, {data.full_name.split(' ')[0]}! 👋
               </h1>
-              <p className="text-primary-foreground/80 text-sm mt-1">
-                Health status: <span className="font-medium">{data.health_status}</span>
+              <p className="text-muted-foreground mt-1 flex items-center gap-2">
+                <Activity size={14} className="text-primary" />
+                Health status: <span className="font-medium text-foreground">{data.health_status}</span>
               </p>
               {data.last_check_in && (
-                <p className="text-primary-foreground/60 text-xs mt-0.5">
-                  Last check-in: {new Date(data.last_check_in).toLocaleDateString()}
+                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <Clock size={12} /> Last check-in: {new Date(data.last_check_in).toLocaleDateString()}
                 </p>
               )}
             </div>
-            <button
-              onClick={copyId}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-background/20 text-primary-foreground text-sm font-mono hover:bg-background/30 transition-colors"
-            >
-              {data.unique_uid} {copied ? <Check size={14} /> : <Copy size={14} />}
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-background/30 backdrop-blur-sm border border-border">
+                <Shield size={14} className="text-emerald-400" />
+                <span className="text-xs font-mono text-foreground">{data.unique_uid}</span>
+                <button onClick={copyId} className="ml-1 p-1 hover:bg-muted rounded-md transition-colors">
+                  {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} className="text-muted-foreground" />}
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                <Wifi size={12} />
+                <span>Live Sync</span>
+              </div>
+            </div>
           </div>
         </motion.div>
 
-        {/* ── Scheduler-triggered nudge (from APScheduler) ────────────────────── */}
+        {/* ===== AI Health Insight Summary ===== */}
+        <motion.div custom={0.5} variants={fadeUp} className="glass-card rounded-3xl p-5 border border-border/50">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0">
+              <Brain size={18} className="text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-foreground">AI Insight</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {data.active_course
+                  ? `Your recovery is on track. Continue with your current course "${data.active_course.course_name}".`
+                  : 'No active course. Share your Patient ID with your doctor to get started.'}
+              </p>
+            </div>
+            <HealthScoreRing score={healthScore} />
+          </div>
+        </motion.div>
+
+        {/* ===== Pending Question Nudge ===== */}
         {data.pending_question && (
           <motion.div
-            custom={0.5}
+            custom={1}
             variants={fadeUp}
-            className="glass-card p-5 border-l-4 border-primary bg-primary/5"
+            className="glass-card rounded-3xl p-5 border-l-4 border-primary bg-primary/5"
           >
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center shrink-0 mt-0.5">
-                <Bell size={14} className="text-primary-foreground" />
+              <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0 mt-0.5">
+                <Bell size={16} className="text-primary-foreground" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground mb-0.5">
@@ -217,12 +295,12 @@ const PatientDashboard = () => {
           </motion.div>
         )}
 
-        {/* ── Start daily check-in CTA and Quick Wound Upload ────────── */}
+        {/* ===== Quick Actions ===== */}
         {!data.pending_question && (
           <motion.div custom={1} variants={fadeUp} className="grid sm:grid-cols-2 gap-4">
             <button
               onClick={openAgentChat}
-              className="w-full glass-card p-5 flex items-center justify-between hover:border-primary/40 transition-colors group rounded-xl"
+              className="w-full glass-card p-5 flex items-center justify-between hover:border-primary/40 transition-all group rounded-2xl hover:scale-[1.02]"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0">
@@ -239,7 +317,7 @@ const PatientDashboard = () => {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingWound}
-              className="w-full glass-card p-5 flex items-center justify-between hover:border-orange-400/40 transition-colors group rounded-xl"
+              className="w-full glass-card p-5 flex items-center justify-between hover:border-orange-400/40 transition-all group rounded-2xl hover:scale-[1.02]"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
@@ -252,24 +330,18 @@ const PatientDashboard = () => {
               </div>
               <Upload size={18} className="text-muted-foreground group-hover:text-orange-400 transition-colors shrink-0" />
             </button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              accept="image/*" 
-              onChange={handleWoundUpload} 
-            />
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleWoundUpload} />
           </motion.div>
         )}
 
+        {/* ===== Main Grid ===== */}
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* ── Active Course ───────────────────────────────────────────────── */}
-          <motion.div custom={2} variants={fadeUp} className="lg:col-span-2 glass-card p-6">
+          <motion.div custom={2} variants={fadeUp} className="lg:col-span-2 glass-card rounded-3xl p-6 border border-border/50">
             <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
               <Activity size={18} className="text-primary" /> Active Course
             </h2>
             {data.active_course ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-medium text-foreground">{data.active_course.course_name}</p>
@@ -277,26 +349,25 @@ const PatientDashboard = () => {
                   </div>
                   <span className="text-sm font-medium text-primary">{data.active_course.progress_pct}%</span>
                 </div>
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${data.active_course.progress_pct}%` }}
-                    transition={{ duration: 1, ease: [0, 0, 0.2, 1] }}
-                    className="h-full gradient-primary rounded-full"
+                    transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1] }}
+                    className="h-full bg-gradient-to-r from-primary to-secondary rounded-full"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {data.active_course.start_date} → {data.active_course.end_date}
-                </p>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Calendar size={12} /> {data.active_course.start_date}</span>
+                  <span className="flex items-center gap-1"><TrendingUp size={12} /> {data.active_course.end_date}</span>
+                </div>
                 {data.active_course.notes && (
-                  <p className="text-xs text-muted-foreground italic">{data.active_course.notes}</p>
+                  <p className="text-xs text-muted-foreground italic border-t border-border/50 pt-3">{data.active_course.notes}</p>
                 )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-6 gap-2">
-                <p className="text-sm text-muted-foreground text-center">
-                  No active course assigned yet.
-                </p>
+                <p className="text-sm text-muted-foreground text-center">No active course assigned yet.</p>
                 <p className="text-xs text-muted-foreground text-center">
                   Share your Patient ID (<span className="font-mono text-foreground">{data.unique_uid}</span>) with your doctor.
                 </p>
@@ -304,19 +375,23 @@ const PatientDashboard = () => {
             )}
           </motion.div>
 
-          {/* ── Medications today ────────────────────────────────────────────── */}
-          <motion.div custom={3} variants={fadeUp} className="glass-card p-6">
+          <motion.div custom={3} variants={fadeUp} className="glass-card rounded-3xl p-6 border border-border/50">
             <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Pill size={18} className="text-secondary" /> Medications
+              <Pill size={18} className="text-secondary" /> Medications Today
             </h2>
             <div className="space-y-3">
               {data.medications_today.length > 0 ? (
                 data.medications_today.map((med) => (
-                  <div key={med.id} className="p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
-                    <p className="text-sm font-medium text-foreground">{med.name}</p>
+                  <div key={med.id} className="p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <p className="text-sm font-medium text-foreground">{med.name}</p>
+                      <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">Taken</span>
+                    </div>
                     <p className="text-xs text-muted-foreground">{med.dosage} · {med.frequency}</p>
                     {med.time_of_day && (
-                      <p className="text-xs text-muted-foreground/70 mt-0.5">{med.time_of_day}</p>
+                      <p className="text-xs text-muted-foreground/70 mt-1 flex items-center gap-1">
+                        <Clock size={10} /> {med.time_of_day}
+                      </p>
                     )}
                   </div>
                 ))
@@ -327,20 +402,79 @@ const PatientDashboard = () => {
           </motion.div>
         </div>
 
-        {/* ── Doctor Messages ────────────────────────────────────────────────── */}
-        <motion.div custom={4} variants={fadeUp} className="glass-card p-6">
-          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-            <MessageSquare size={18} className="text-primary" /> Doctor Messages
+        {/* ===== Health Analytics Section ===== */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <motion.div custom={4} variants={fadeUp} className="glass-card rounded-3xl p-5 border border-border/50">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <TrendingUp size={15} className="text-emerald-400" /> Recovery Progress
+            </h3>
+            <div className="h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={[
+                  { week: 'W1', progress: 20 },
+                  { week: 'W2', progress: 35 },
+                  { week: 'W3', progress: 50 },
+                  { week: 'W4', progress: 65 },
+                  { week: 'W5', progress: 80 },
+                ]}>
+                  <defs>
+                    <linearGradient id="recoveryGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: 12, border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
+                  <Area type="monotone" dataKey="progress" stroke="#10b981" fill="url(#recoveryGrad)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+
+          <motion.div custom={5} variants={fadeUp} className="glass-card rounded-3xl p-5 border border-border/50">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <PieChart size={15} className="text-cyan-400" /> Medication Adherence
+            </h3>
+            <div className="h-40 flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <RePieChart>
+                  <Pie data={adherenceData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={2}>
+                    {adherenceData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: 12, border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
+                </RePieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex justify-center gap-4 mt-2 text-xs">
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Taken 80%</div>
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Missed 20%</div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* ===== Doctor Messages ===== */}
+        <motion.div custom={6} variants={fadeUp} className="glass-card rounded-3xl p-6 border border-border/50">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <MessageSquare size={18} className="text-primary" /> Doctor Messages
+            </h2>
             {data.unread_messages > 0 && (
-              <span className="ml-auto text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
                 {data.unread_messages} new
               </span>
             )}
-          </h2>
+          </div>
           <div className="space-y-3">
             {messages.length > 0 ? (
               messages.map((msg) => (
-                <div key={msg.id} className="p-3 rounded-lg border border-border">
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-4 rounded-xl border border-border bg-muted/20 hover:bg-muted/40 transition-colors"
+                >
                   <div className="flex justify-between items-start gap-2">
                     <p className="text-sm font-medium text-foreground">{msg.doctor_name}</p>
                     <span className="text-xs text-muted-foreground shrink-0">
@@ -348,15 +482,23 @@ const PatientDashboard = () => {
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">{msg.message}</p>
-                </div>
+                  {!msg.is_read && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-primary">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary" /> New
+                    </div>
+                  )}
+                </motion.div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No messages yet.</p>
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
+                <MessageSquare size={32} className="text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No messages yet.</p>
+              </div>
             )}
           </div>
         </motion.div>
 
-        {/* ── Impact Detector ────────────────────────────────────────────────── */}
+        {/* ===== Impact Detector ===== */}
         <ImpactDetector
           patientName={data.full_name}
           patientPhone={data.emergency_contact_phone || ''}

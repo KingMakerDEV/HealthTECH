@@ -15,7 +15,7 @@ const Navbar = () => {
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
+
     if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
       document.documentElement.classList.add('dark');
       setDark(true);
@@ -28,7 +28,7 @@ const Navbar = () => {
   const toggleDark = () => {
     const newDark = !dark;
     setDark(newDark);
-    
+
     if (newDark) {
       document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
@@ -46,13 +46,23 @@ const Navbar = () => {
   // Choose logo based on theme
   const logoSrc = dark ? '/CareNetra_black.png' : '/CareNetra_white.png';
 
+  // Smooth scroll to section
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+    // Close mobile menu if open
+    setMobileOpen(false);
+  };
+
   return (
     <nav className="sticky top-0 z-50 bg-[#f8fafc] dark:bg-gradient-to-r dark:from-[#0b0f19] dark:to-[#111827] border-b border-gray-200 dark:border-gray-800 backdrop-blur-md transition-all duration-300 ease-in-out">
       <div className="container mx-auto flex items-center justify-between h-14 sm:h-16 md:h-20 px-4 sm:px-6">
         <Link to="/" className="flex items-center">
-          <img 
-            src={logoSrc} 
-            alt="CARENETRA Logo" 
+          <img
+            src={logoSrc}
+            alt="CARENETRA Logo"
             className="h-11 sm:h-12 md:h-14 w-auto object-contain transition-opacity duration-200"
             style={{ imageRendering: 'crisp-edges' }}
           />
@@ -61,21 +71,54 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-6">
           {!authed ? (
             <>
-              <Link to="/#features" className="text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors text-sm font-medium">Features</Link>
-              <Link to="/#how-it-works" className="text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors text-sm font-medium">How it works</Link>
-              <Link to="/login" className="text-sm font-medium text-gray-900 dark:text-white">Sign in</Link>
-              <Link to="/register" className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">Get Started</Link>
+              {/* Smooth scroll links */}
+              <button
+                onClick={() => scrollToSection('features')}
+                className="text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors text-sm font-medium bg-transparent border-none cursor-pointer"
+              >
+                Features
+              </button>
+              <button
+                onClick={() => scrollToSection('how-it-works')}
+                className="text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors text-sm font-medium bg-transparent border-none cursor-pointer"
+              >
+                How it works
+              </button>
+              <Link to="/login" className="text-sm font-medium text-gray-900 dark:text-white">
+                Sign in
+              </Link>
+              <Link
+                to="/register"
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Get Started
+              </Link>
             </>
           ) : (
             <>
-              <Link to={getDashboardPath(user?.role || 'PATIENT')} className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors">Dashboard</Link>
-              <Link to={`/${user?.role?.toLowerCase()}/profile`} className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors">Profile</Link>
+              <Link
+                to={getDashboardPath(user?.role || 'PATIENT')}
+                className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors"
+              >
+                Dashboard
+              </Link>
+              <Link
+                to={`/${user?.role?.toLowerCase()}/profile`}
+                className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors"
+              >
+                Profile
+              </Link>
               <span className="text-sm text-gray-600 dark:text-gray-400">{user?.name}</span>
-              <button onClick={handleLogout} className="text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"><LogOut size={18} /></button>
+              <button
+                onClick={handleLogout}
+                className="text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+              >
+                <LogOut size={18} />
+              </button>
             </>
           )}
-          <button 
-            onClick={toggleDark} 
+          <button
+            onClick={toggleDark}
             className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
             aria-label="Toggle theme"
           >
@@ -84,8 +127,8 @@ const Navbar = () => {
         </div>
 
         <div className="flex md:hidden items-center gap-2">
-          <button 
-            onClick={toggleDark} 
+          <button
+            onClick={toggleDark}
             className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
             aria-label="Toggle theme"
           >
@@ -108,14 +151,55 @@ const Navbar = () => {
             <div className="p-4 flex flex-col gap-3">
               {!authed ? (
                 <>
-                  <Link to="/login" onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2 text-gray-900 dark:text-white">Sign in</Link>
-                  <Link to="/register" onClick={() => setMobileOpen(false)} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium text-center hover:bg-blue-700 transition-colors">Get Started</Link>
+                  <button
+                    onClick={() => scrollToSection('features')}
+                    className="text-sm font-medium py-2 text-gray-900 dark:text-white text-left"
+                  >
+                    Features
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('how-it-works')}
+                    className="text-sm font-medium py-2 text-gray-900 dark:text-white text-left"
+                  >
+                    How it works
+                  </button>
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="text-sm font-medium py-2 text-gray-900 dark:text-white"
+                  >
+                    Sign in
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={() => setMobileOpen(false)}
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium text-center hover:bg-blue-700 transition-colors"
+                  >
+                    Get Started
+                  </Link>
                 </>
               ) : (
                 <>
-                  <Link to={getDashboardPath(user?.role || 'PATIENT')} onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2 text-gray-900 dark:text-white">Dashboard</Link>
-                  <Link to={`/${user?.role?.toLowerCase()}/profile`} onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2 text-gray-900 dark:text-white">Profile</Link>
-                  <button onClick={() => { handleLogout(); setMobileOpen(false); }} className="text-sm font-medium py-2 text-red-600 dark:text-red-400 text-left">Log out</button>
+                  <Link
+                    to={getDashboardPath(user?.role || 'PATIENT')}
+                    onClick={() => setMobileOpen(false)}
+                    className="text-sm font-medium py-2 text-gray-900 dark:text-white"
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to={`/${user?.role?.toLowerCase()}/profile`}
+                    onClick={() => setMobileOpen(false)}
+                    className="text-sm font-medium py-2 text-gray-900 dark:text-white"
+                  >
+                    Profile
+                  </Link>
+                  <button
+                    onClick={() => { handleLogout(); setMobileOpen(false); }}
+                    className="text-sm font-medium py-2 text-red-600 dark:text-red-400 text-left"
+                  >
+                    Log out
+                  </button>
                 </>
               )}
             </div>

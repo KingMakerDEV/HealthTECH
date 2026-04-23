@@ -350,8 +350,9 @@ const LandingPage = () => {
     rating: 5,
   });
 
-  // 👇 NEW: state to force remount of SplitText on theme change
+  // State for theme tracking and SplitText remount
   const [themeKey, setThemeKey] = useState(0);
+  const [isDark, setIsDark] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll();
@@ -374,11 +375,19 @@ const LandingPage = () => {
     setIsAddDialogOpen(false);
   };
 
-  // 👇 NEW: detect theme changes and increment key to remount SplitText
+  // Initialize theme state from html class
+  useEffect(() => {
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    setIsDark(isDarkMode);
+  }, []);
+
+  // Detect theme changes and update state + remount SplitText
   useEffect(() => {
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.attributeName === 'class') {
+          const isDarkMode = document.documentElement.classList.contains('dark');
+          setIsDark(isDarkMode);
           setThemeKey(prev => prev + 1);
         }
       });
@@ -415,6 +424,9 @@ const LandingPage = () => {
     initLenis();
     return () => {};
   }, []);
+
+  // Dynamic logo based on theme
+  const footerLogoSrc = isDark ? '/CareNetra_black.png' : '/CareNetra_white.png';
 
   return (
     <div ref={containerRef} className="min-h-screen bg-background text-foreground">
@@ -924,13 +936,13 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* === FOOTER === */}
+      {/* === FOOTER with dynamic logo === */}
       <footer className="border-t border-border/50 py-8 sm:py-12">
         <div className="container mx-auto px-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img
-                src="/CareNetra.png"
+                src={footerLogoSrc}
                 alt="CARENETRA Logo"
                 className="h-8 w-auto sm:h-10"
               />
