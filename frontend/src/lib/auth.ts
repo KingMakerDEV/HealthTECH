@@ -28,7 +28,6 @@ export const clearAuth = () => {
 export const isAuthenticated = (): boolean => !!getToken();
 
 export const getDashboardPath = (role: string): string => {
+  return role === 'DOCTOR' ? '/doctor/dashboard' : '/patient/dashboard';
   if (role === 'DOCTOR') return '/doctor/dashboard';
-  if (role === 'VOLUNTEER') return '/volunteer/dashboard';
-  return '/patient/dashboard';
 };
